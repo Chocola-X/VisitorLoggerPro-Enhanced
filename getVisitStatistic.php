@@ -8,6 +8,19 @@ if (ob_get_level()) {
 }
 ob_start();
 
+// 允许跨域请求
+header('Access-Control-Allow-Origin: *');
+header('Access-Control-Allow-Methods: POST, GET, OPTIONS');
+header('Access-Control-Allow-Headers: Content-Type, Cache-Control, Pragma');
+header('Access-Control-Max-Age: 1728000');
+
+// 处理预检请求
+if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+    ob_end_clean();
+    header('HTTP/1.1 200 OK');
+    exit;
+}
+
 // 添加缓存控制头，确保响应不被缓存
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
@@ -117,6 +130,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' || $_SERVER['REQUEST_METHOD'] === 'GET
             $db = Typecho_Db::get();
         }
         $prefix = $db->getPrefix();
+
+        // 确保表存在
+        try {
+            // 测试表是否存在
+            $tableExists = $db->fetchRow($db->select()->from($prefix . 'visitor_log')->limit(1));
+            
+            if ($tableExists === false) {
+                throw new Exception("访问日志表不存在");
+            }
+        } catch (Exception $e) {
+            error_log('Error checking visitor_log table: ' . $e->getMessage());
+            ob_end_clean();
+            header('HTTP/1.1 500 Internal Server Error');
+            echo json_encode([
+                'error' => '数据表访问错误', 
+                'message' => $e->getMessage(),
+                'debug_info' => 'Failed to access visitor_log table'
+            ], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
 
         // 使用缓存机制提高性能
         $cacheKey = md5($startDate . $endDate);

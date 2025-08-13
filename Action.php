@@ -1,12 +1,11 @@
 <?php
 
 /**
- * 访客统计动作处理
- * 
- * @package VisitorLoggerPro
- * @author 璇
- * @version 2.0.2
- * @link https://blog.ybyq.wang/
+ * 访客统计操作类
+ *
+ * @package custom
+ * @xuan
+ * @version 2.0.3
  */
 
 if (!defined('__TYPECHO_ROOT_DIR__')) exit;

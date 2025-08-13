@@ -5,14 +5,12 @@ if (!defined('__TYPECHO_ROOT_DIR__')) {
 }
 
 /**
- * 前后台独立页面显示访客日志插件，记录来访者的信息，统计来访者情况，本插件基于VisitorLogger进行开发，现已排除蜘蛛IP，且支持IPV6。
- * V2.1.1: 移除本地chart.js文件，全部使用CDN加载图表库，优化页面加载速度。
- * V2.1.0: 增加IP模糊匹配、按天清理日志、修复多项BUG，优化统计图表和恢复逻辑。
- *
+ * 访客统计插件
+ * 
  * @package VisitorLoggerPro
  * @author 璇
- * @version 2.1.1 
- * @link https://blog.ybyq.wang/
+ * @version 2.1.3
+ * @link https://blog.ybyq.wang
  */
 
 // 加载兼容适配器

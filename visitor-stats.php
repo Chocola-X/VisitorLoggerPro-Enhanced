@@ -5,7 +5,7 @@
  *
  * @package custom
  * @xuan
- * @version 2.0.2
+ * @version 2.0.4
  * 
  * Template Name: 独立页面访客统计
  */
@@ -24,8 +24,11 @@ if ($this->user->hasLogin() && $this->user->group == 'administrator' && isset($_
             // 根据Typecho版本选择正确的方式获取Db实例
             if (class_exists('\\Typecho\\Db')) {
                 $db = \Typecho\Db::get();
-            } else {
+            } else if (class_exists('Typecho_Db')) {
                 $db = Typecho_Db::get();
+                $prefix = $db->getPrefix();
+            } else {
+                throw new Exception('无法获取数据库连接');
             }
             
             // 从访问日志表中删除该IP的所有记录
@@ -84,6 +87,9 @@ if ($this->user->hasLogin() && $this->user->group == 'administrator') {
 $this->need('component/header.php');
 ?>
 
+<!-- 预加载echarts库，避免异步加载问题 -->
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+
 <!-- aside -->
 <?php $this->need('component/aside.php'); ?>
 <!-- / aside -->
@@ -125,7 +131,7 @@ $this->need('component/header.php');
                                         来自 <span id="totalCountries">0</span> 个国家/地区
                                         <span class="excluded-note">(已排除管理员登录设备IP)</span>
                                     </p>
-                                    <p style="margin: 0; color: #ff4d4f; font-size: 13px;">注：此版本需要手动刷新页面才有数据显示</p>
+                                    <!-- <p style="margin: 0; color: #ff4d4f; font-size: 13px;">注：此版本需要手动刷新页面才有数据显示</p> -->
                                 </div>
 
                                 <!-- 调试信息区域 -->
@@ -1039,7 +1045,6 @@ $this->need('component/header.php');
     }
 </style>
 
-<script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
 <script>
     // 将变量声明放在最前面
     // 全局变量定义
@@ -1069,26 +1074,66 @@ $this->need('component/header.php');
         // 初始化调试信息区域
         initDebugPanel();
 
-        // 立即初始化图表
-        initializeEverything();
+        // 检查echarts是否加载
+        if (typeof echarts === 'undefined') {
+            console.log("echarts库未加载，尝试加载...");
+            var scriptLoaded = false;
+            
+            // 检查页面上是否已有echarts脚本标签
+            document.querySelectorAll('script').forEach(function(script) {
+                if (script.src.indexOf('echarts') > -1) {
+                    scriptLoaded = true;
+                }
+            });
+            
+            // 如果页面上没有echarts脚本，动态添加
+            if (!scriptLoaded) {
+                var script = document.createElement('script');
+                script.src = "https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js";
+                script.onload = function() {
+                    console.log("echarts库加载完成，开始初始化图表");
+                    // 等待DOM完全准备好
+                    setTimeout(function() {
+                        initializeEverything();
+                    }, 200);
+                };
+                document.head.appendChild(script);
+            } else {
+                // 脚本标签存在但可能尚未加载完成，等待并轮询检查
+                var checkInterval = setInterval(function() {
+                    if (typeof echarts !== 'undefined') {
+                        clearInterval(checkInterval);
+                        console.log("echarts库已加载完成，开始初始化图表");
+                        initializeEverything();
+                    } else {
+                        console.log("等待echarts库加载...");
+                    }
+                }, 300);
+                
+                // 设置超时，避免无限等待
+                setTimeout(function() {
+                    clearInterval(checkInterval);
+                    console.log("echarts库加载超时，请刷新页面");
+                    
+                    // 显示错误提示
+                    var errorStatus = document.getElementById('errorStatus');
+                    if (errorStatus) {
+                        errorStatus.style.display = 'block';
+                        errorStatus.innerHTML = '<p>图表库加载失败，请尝试刷新页面或检查网络连接。</p>';
+                    }
+                }, 10000); // 10秒超时
+            }
+        } else {
+            // echarts已加载，直接初始化
+            console.log("echarts库已存在，直接初始化");
+            initializeEverything();
+        }
 
         // 添加窗口大小变化监听
-        window.addEventListener('resize', function() {
-            if (countryChart) {
-                countryChart.resize();
-            }
-            if (provinceChart) {
-                provinceChart.resize();
-            }
-        });
+        window.addEventListener('resize', handleResize);
 
         // 处理屏幕旋转事件（移动设备）
-        window.addEventListener('orientationchange', function() {
-            setTimeout(function() {
-                if (countryChart) countryChart.resize();
-                if (provinceChart) provinceChart.resize();
-            }, 300);
-        });
+        window.addEventListener('orientationchange', handleOrientationChange);
     });
 
     // 初始化调试面板
@@ -1155,6 +1200,20 @@ $this->need('component/header.php');
             console.log("开始初始化所有内容...");
             updateDebugInfo('图表加载状态', '初始化中...');
             
+            // 清理先前的实例，避免内存泄漏
+            if (countryChart) {
+                countryChart.dispose();
+                countryChart = null;
+            }
+            
+            if (provinceChart) {
+                provinceChart.dispose();
+                provinceChart = null;
+            }
+            
+            // 移除先前绑定的事件监听器，防止重复绑定
+            removeEventListeners();
+            
             // 初始化图表
             initChart();
 
@@ -1218,6 +1277,75 @@ $this->need('component/header.php');
         }
     }
 
+    // 移除事件监听器，防止重复绑定
+    function removeEventListeners() {
+        // 移除窗口大小变化监听器
+        window.removeEventListener('resize', handleResize);
+        window.removeEventListener('orientationchange', handleOrientationChange);
+        
+        // 移除日期按钮的监听器
+        const filterBtn = document.getElementById('filterBtn');
+        const resetBtn = document.getElementById('resetBtn');
+        const last7DaysBtn = document.getElementById('last7DaysBtn');
+        const last30DaysBtn = document.getElementById('last30DaysBtn');
+        const allTimeBtn = document.getElementById('allTimeBtn');
+        
+        if (filterBtn) filterBtn.replaceWith(filterBtn.cloneNode(true));
+        if (resetBtn) resetBtn.replaceWith(resetBtn.cloneNode(true));
+        if (last7DaysBtn) last7DaysBtn.replaceWith(last7DaysBtn.cloneNode(true));
+        if (last30DaysBtn) last30DaysBtn.replaceWith(last30DaysBtn.cloneNode(true));
+        if (allTimeBtn) allTimeBtn.replaceWith(allTimeBtn.cloneNode(true));
+        
+        // 移除视图切换按钮的监听器
+        document.querySelectorAll('.view-toggle button').forEach(button => {
+            button.replaceWith(button.cloneNode(true));
+        });
+        
+        // 移除图表样式切换按钮的监听器
+        document.querySelectorAll('.chart-style-toggle button').forEach(button => {
+            button.replaceWith(button.cloneNode(true));
+        });
+        
+        // 移除标签页切换按钮的监听器
+        document.querySelectorAll('.tab-btn').forEach(button => {
+            button.replaceWith(button.cloneNode(true));
+        });
+        
+        // 移除设备排除按钮的监听器
+        const excludeSelfBtn = document.getElementById('excludeSelfBtn');
+        const includeSelfBtn = document.getElementById('includeSelfBtn');
+        const deleteDataBtn = document.getElementById('deleteDataBtn');
+        
+        if (excludeSelfBtn) excludeSelfBtn.replaceWith(excludeSelfBtn.cloneNode(true));
+        if (includeSelfBtn) includeSelfBtn.replaceWith(includeSelfBtn.cloneNode(true));
+        if (deleteDataBtn) deleteDataBtn.replaceWith(deleteDataBtn.cloneNode(true));
+        
+        // 移除调试面板按钮的监听器
+        const toggleBtn = document.getElementById('toggleDebug');
+        const forceReloadBtn = document.getElementById('forceReload');
+        
+        if (toggleBtn) toggleBtn.replaceWith(toggleBtn.cloneNode(true));
+        if (forceReloadBtn) forceReloadBtn.replaceWith(forceReloadBtn.cloneNode(true));
+    }
+
+    // 处理窗口大小变化
+    function handleResize() {
+        if (countryChart) {
+            countryChart.resize();
+        }
+        if (provinceChart) {
+            provinceChart.resize();
+        }
+    }
+
+    // 处理屏幕旋转事件
+    function handleOrientationChange() {
+        setTimeout(function() {
+            if (countryChart) countryChart.resize();
+            if (provinceChart) provinceChart.resize();
+        }, 300);
+    }
+
     // 添加带重试的数据加载函数
     function loadDataWithRetry(startDate, endDate) {
         dataLoadAttempts++;
@@ -1230,7 +1358,7 @@ $this->need('component/header.php');
                 console.log("数据加载成功:", data ? "有数据" : "无数据");
                 updateDebugInfo('数据加载状态', data ? '加载成功' : '数据为空');
 
-                if (!data && dataLoadAttempts < maxLoadAttempts) {
+                if ((!data || !data.countries || data.countries.length === 0) && dataLoadAttempts < maxLoadAttempts) {
                     // 如果没有数据且未达到最大尝试次数，再次尝试
                     console.log("数据加载不完整，再次尝试...");
                     updateDebugInfo('数据加载状态', '数据不完整，准备重试...');
@@ -1240,6 +1368,28 @@ $this->need('component/header.php');
                     }, 1000);
                 } else {
                     dataLoadAttempts = 0; // 重置尝试计数
+                    
+                    // 如果仍然没有数据，显示错误提示
+                    if (!data || !data.countries || data.countries.length === 0) {
+                        console.error("多次尝试后仍无法加载数据");
+                        const errorStatus = document.getElementById('errorStatus');
+                        if (errorStatus) {
+                            errorStatus.style.display = 'block';
+                            errorStatus.innerHTML = '<p>无法加载统计数据，请检查网络连接或刷新页面重试。<button id="manualRetry" style="margin-left:10px;padding:2px 8px;">重试</button></p>';
+                            
+                            // 添加手动重试按钮点击事件
+                            const manualRetryBtn = document.getElementById('manualRetry');
+                            if (manualRetryBtn) {
+                                manualRetryBtn.addEventListener('click', function() {
+                                    errorStatus.style.display = 'none';
+                                    const today = new Date();
+                                    const last7 = new Date();
+                                    last7.setDate(today.getDate() - 6);
+                                    loadDataWithRetry(formatDate(last7) + " 00:00:00", formatDate(today) + " 23:59:59");
+                                });
+                            }
+                        }
+                    }
                 }
             })
             .catch(error => {
@@ -1253,9 +1403,28 @@ $this->need('component/header.php');
 
                     setTimeout(() => {
                         loadDataWithRetry(startDate, endDate);
-                    }, 1000);
+                    }, 1500 * dataLoadAttempts); // 逐渐增加重试间隔
                 } else {
                     dataLoadAttempts = 0; // 重置尝试计数
+                    
+                    // 显示重试按钮
+                    const errorStatus = document.getElementById('errorStatus');
+                    if (errorStatus) {
+                        errorStatus.style.display = 'block';
+                        errorStatus.innerHTML = '<p>加载数据时出现问题，请检查网络连接或点击重试。<button id="manualRetry" style="margin-left:10px;padding:2px 8px;">重试</button></p>';
+                        
+                        // 添加手动重试按钮点击事件
+                        const manualRetryBtn = document.getElementById('manualRetry');
+                        if (manualRetryBtn) {
+                            manualRetryBtn.addEventListener('click', function() {
+                                errorStatus.style.display = 'none';
+                                const today = new Date();
+                                const last7 = new Date();
+                                last7.setDate(today.getDate() - 6);
+                                loadDataWithRetry(formatDate(last7) + " 00:00:00", formatDate(today) + " 23:59:59");
+                            });
+                        }
+                    }
                 }
             });
     }
@@ -1539,77 +1708,122 @@ $this->need('component/header.php');
                 });
             }
 
-            // 使用Promise处理请求
-            return fetch('<?php echo $this->options->pluginUrl; ?>/VisitorLoggerPro/getVisitStatistic.php', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Cache-Control': 'no-cache',
-                        'Pragma': 'no-cache'
-                    },
-                    body: JSON.stringify({
-                        startDate,
-                        endDate
-                    })
-                })
-                .then(response => {
-                    if (!response.ok) {
-                        throw new Error('网络响应错误');
+            // 获取当前站点根URL
+            let baseUrl = window.location.protocol + '//' + window.location.host;
+            
+            // 构建API完整URL
+            let apiUrl = '<?php echo $this->options->pluginUrl; ?>/VisitorLoggerPro/getVisitStatistic.php';
+            
+            // 如果是相对路径，则添加基础URL
+            if (apiUrl.indexOf('http') !== 0) {
+                apiUrl = baseUrl + apiUrl;
+            }
+            
+            console.log("API请求URL:", apiUrl);
+            
+            // 使用传统的XMLHttpRequest，避免fetch可能导致的问题
+            return new Promise((resolve, reject) => {
+                const xhr = new XMLHttpRequest();
+                
+                // 设置30秒超时
+                xhr.timeout = 30000;
+                
+                xhr.open('POST', apiUrl, true);
+                xhr.setRequestHeader('Content-Type', 'application/json');
+                xhr.setRequestHeader('Cache-Control', 'no-cache');
+                xhr.setRequestHeader('Pragma', 'no-cache');
+                
+                // 处理加载完成
+                xhr.onload = function() {
+                    if (xhr.status >= 200 && xhr.status < 300) {
+                        try {
+                            const data = JSON.parse(xhr.responseText);
+                            console.log("数据加载成功:", data);
+                            resolve(data);
+                        } catch (e) {
+                            console.error("解析响应数据失败:", e);
+                            reject(new Error("解析数据失败: " + e.message));
+                        }
+                    } else {
+                        console.error("服务器错误:", xhr.status, xhr.statusText);
+                        reject(new Error("服务器错误: " + xhr.status));
                     }
-                    return response.json();
-                })
-                .then(data => {
-                    console.log("API返回数据:", data);
+                };
+                
+                // 处理错误
+                xhr.onerror = function() {
+                    console.error("网络请求失败");
+                    reject(new Error("网络请求失败"));
+                };
+                
+                // 处理超时
+                xhr.ontimeout = function() {
+                    console.error("请求超时");
+                    reject(new Error("请求超时，请检查网络连接"));
+                };
+                
+                // 发送请求
+                xhr.send(JSON.stringify({
+                    startDate,
+                    endDate
+                }));
+            })
+            .then(data => {
+                console.log("API返回数据:", data);
 
-                    const transformedData = {
-                        countries: Object.entries(data.countryData || {}).map(([name, value]) => ({
-                            country: name,
-                            count: value,
-                            ips: []
-                        })),
-                        provinces: Object.entries(data.provinceData || {}).map(([name, value]) => ({
-                            province: name,
-                            count: value
-                        })),
-                        routes: Object.entries(data.routeData || {}).map(([name, value]) => ({
-                            route: name,
-                            count: value
-                        })),
-                        totalVisits: data.totalVisits || 0,
-                        totalCountries: data.totalCountries || 0
-                    };
+                const transformedData = {
+                    countries: Object.entries(data.countryData || {}).map(([name, value]) => ({
+                        country: name,
+                        count: value,
+                        ips: []
+                    })),
+                    provinces: Object.entries(data.provinceData || {}).map(([name, value]) => ({
+                        province: name,
+                        count: value
+                    })),
+                    routes: Object.entries(data.routeData || {}).map(([name, value]) => ({
+                        route: name,
+                        count: value
+                    })),
+                    totalVisits: data.totalVisits || 0,
+                    totalCountries: data.totalCountries || 0
+                };
 
-                    globalStatsData = {
-                        countries: transformedData.countries,
-                        provinces: transformedData.provinces,
-                        totalVisits: transformedData.totalVisits,
-                        totalCountries: transformedData.totalCountries
-                    };
+                globalStatsData = {
+                    countries: transformedData.countries,
+                    provinces: transformedData.provinces,
+                    totalVisits: transformedData.totalVisits,
+                    totalCountries: transformedData.totalCountries
+                };
 
-                    updateStatsDisplay();
-                    updateFilterStatus(
-                        globalStatsData.totalVisits,
-                        globalStatsData.totalCountries
-                    );
+                updateStatsDisplay();
+                updateFilterStatus(
+                    globalStatsData.totalVisits,
+                    globalStatsData.totalCountries
+                );
 
-                    return globalStatsData;
-                })
-                .catch(error => {
-                    console.error('获取数据错误:', error);
-                    const errorStatus = document.getElementById('errorStatus');
-                    if (errorStatus) {
-                        errorStatus.style.display = 'block';
-                    }
-                    if (countryChart) countryChart.hideLoading();
-                    if (provinceChart) provinceChart.hideLoading();
-                    throw error; // 重新抛出错误以便调用者处理
-                });
+                return globalStatsData;
+            })
+            .catch(error => {
+                console.error('获取数据错误:', error);
+                const errorStatus = document.getElementById('errorStatus');
+                if (errorStatus) {
+                    errorStatus.style.display = 'block';
+                    errorStatus.innerHTML = '<p>获取数据失败，请检查网络连接或刷新页面重试。</p>';
+                }
+                // 确保隐藏加载动画
+                if (countryChart) countryChart.hideLoading();
+                if (provinceChart) provinceChart.hideLoading();
+                throw error; // 重新抛出错误以便调用者处理
+            });
         } catch (e) {
             console.error('获取数据函数执行出错:', e);
             const errorStatus = document.getElementById('errorStatus');
             if (errorStatus) {
                 errorStatus.style.display = 'block';
+                errorStatus.innerHTML = '<p>加载过程中出错，请刷新页面重试。</p><p style="font-size:12px;color:#999;">错误信息: ' + e.message + '</p>';
             }
+            // 确保隐藏加载动画
             if (countryChart) countryChart.hideLoading();
             if (provinceChart) provinceChart.hideLoading();
             return Promise.reject(e);
