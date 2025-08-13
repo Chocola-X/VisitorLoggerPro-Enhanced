@@ -56,9 +56,78 @@ $countryStats = array_values($countryStats);
 $routeStats = array_values($routeStats);
 ?>
 
-<script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+<!-- 智能加载ECharts：优先CDN，失败时自动回退到本地 -->
+<script>
+    // 加载ECharts的智能回退机制
+    function loadECharts() {
+        return new Promise((resolve, reject) => {
+            // 首先尝试CDN
+            const cdnScript = document.createElement('script');
+            cdnScript.src = 'https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js';
+            cdnScript.onload = () => {
+                console.log('✅ ECharts CDN加载成功');
+                resolve('cdn');
+            };
+            cdnScript.onerror = () => {
+                console.warn('⚠️ ECharts CDN加载失败，尝试本地文件');
+                // CDN失败，尝试本地文件
+                const localScript = document.createElement('script');
+                localScript.src = './js/echarts.min.js';
+                localScript.onload = () => {
+                    console.log('✅ ECharts 本地文件加载成功');
+                    resolve('local');
+                };
+                localScript.onerror = () => {
+                    console.error('❌ ECharts 本地文件也加载失败');
+                    reject('both_failed');
+                };
+                document.head.appendChild(localScript);
+            };
+            document.head.appendChild(cdnScript);
+        });
+    }
+
+    // 加载Flatpickr的智能回退机制
+    function loadFlatpickr() {
+        return new Promise((resolve, reject) => {
+            // 首先尝试CDN
+            const cdnScript = document.createElement('script');
+            cdnScript.src = 'https://cdn.jsdelivr.net/npm/flatpickr';
+            cdnScript.onload = () => {
+                console.log('✅ Flatpickr CDN加载成功');
+                // 加载CSS
+                const link = document.createElement('link');
+                link.rel = 'stylesheet';
+                link.href = 'https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css';
+                document.head.appendChild(link);
+                resolve('cdn');
+            };
+            cdnScript.onerror = () => {
+                console.warn('⚠️ Flatpickr CDN加载失败');
+                reject('cdn_failed');
+            };
+            document.head.appendChild(cdnScript);
+        });
+    }
+
+    // 并行加载所有资源
+    Promise.allSettled([loadECharts(), loadFlatpickr()]).then(results => {
+        console.log('📊 资源加载结果:', results);
+        // 触发DOM加载完成事件（如果还没触发）
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initializeApp);
+        } else {
+            initializeApp();
+        }
+    });
+
+    function initializeApp() {
+        // 这里会在后面的代码中定义具体的初始化逻辑
+        if (typeof window.startChartInitialization === 'function') {
+            window.startChartInitialization();
+        }
+    }
+</script>
 
 <script>
     // 调试函数
@@ -76,8 +145,9 @@ $routeStats = array_values($routeStats);
         }
     });
 
-    document.addEventListener('DOMContentLoaded', function() {
-        debugLog('🟢 DOM加载完成，开始初始化...');
+    // 定义全局初始化函数，供智能加载机制调用
+    window.startChartInitialization = function() {
+        debugLog('🟢 开始图表初始化...');
 
         try {
             // 检查图表容器是否存在
@@ -93,15 +163,17 @@ $routeStats = array_values($routeStats);
 
             // 检查 ECharts 是否加载
             if (typeof echarts === 'undefined') {
-                debugLog('❌ ECharts 未加载');
-                // 加载 ECharts
-                const script = document.createElement('script');
-                script.src = "https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js";
-                document.head.appendChild(script);
-                script.onload = function() {
-                    debugLog('✅ ECharts 已手动加载成功');
-                    initializeCharts();
-                };
+                debugLog('❌ ECharts 仍未加载，等待重试...');
+                // 延迟重试
+                setTimeout(() => {
+                    if (typeof echarts !== 'undefined') {
+                        debugLog('✅ ECharts 延迟加载成功');
+                        initializeCharts();
+                    } else {
+                        debugLog('❌ ECharts 最终加载失败');
+                        alert('图表库加载失败，请刷新页面重试');
+                    }
+                }, 1000);
                 return;
             } else {
                 debugLog('✅ ECharts 已加载');
@@ -550,7 +622,7 @@ $routeStats = array_values($routeStats);
                 debugLog('❌ 分页处理出错', e.message);
             }
         }
-    });
+    };
 </script>
 
 <style>

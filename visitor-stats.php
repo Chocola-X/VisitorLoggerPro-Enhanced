@@ -87,8 +87,47 @@ if ($this->user->hasLogin() && $this->user->group == 'administrator') {
 $this->need('component/header.php');
 ?>
 
-<!-- 预加载echarts库，避免异步加载问题 -->
-<script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+<!-- 智能加载ECharts：优先CDN，失败时自动回退到本地 -->
+<script>
+    // 加载ECharts的智能回退机制
+    function loadEChartsWithFallback() {
+        return new Promise((resolve, reject) => {
+            // 首先尝试CDN
+            const cdnScript = document.createElement('script');
+            cdnScript.src = 'https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js';
+            cdnScript.onload = () => {
+                console.log('✅ ECharts CDN加载成功');
+                resolve('cdn');
+            };
+            cdnScript.onerror = () => {
+                console.warn('⚠️ ECharts CDN加载失败，尝试本地文件');
+                // CDN失败，尝试本地文件
+                const localScript = document.createElement('script');
+                localScript.src = './js/echarts.min.js';
+                localScript.onload = () => {
+                    console.log('✅ ECharts 本地文件加载成功');
+                    resolve('local');
+                };
+                localScript.onerror = () => {
+                    console.error('❌ ECharts 本地文件也加载失败');
+                    reject('both_failed');
+                };
+                document.head.appendChild(localScript);
+            };
+            document.head.appendChild(cdnScript);
+        });
+    }
+
+    // 立即开始加载
+    loadEChartsWithFallback().then(result => {
+        console.log('📊 ECharts加载结果:', result);
+        // 设置全局标记，表示ECharts已准备就绪
+        window.echartsReady = true;
+    }).catch(error => {
+        console.error('❌ ECharts加载完全失败:', error);
+        window.echartsReady = false;
+    });
+</script>
 
 <!-- aside -->
 <?php $this->need('component/aside.php'); ?>
@@ -1086,19 +1125,35 @@ $this->need('component/header.php');
                 }
             });
             
-            // 如果页面上没有echarts脚本，动态添加
-            if (!scriptLoaded) {
-                var script = document.createElement('script');
-                script.src = "https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js";
-                script.onload = function() {
-                    console.log("echarts库加载完成，开始初始化图表");
-                    // 等待DOM完全准备好
-                    setTimeout(function() {
-                        initializeEverything();
-                    }, 200);
-                };
-                document.head.appendChild(script);
+            // 检查ECharts是否已通过智能加载机制加载
+            if (typeof echarts !== 'undefined') {
+                console.log("echarts已加载，直接初始化图表");
+                setTimeout(function() {
+                    initializeEverything();
+                }, 200);
+            } else if (window.echartsReady === false) {
+                // 智能加载已失败
+                console.error("ECharts加载失败，无法初始化图表");
+                alert('图表库加载失败，请刷新页面重试');
             } else {
+                // 等待智能加载完成
+                var checkInterval = setInterval(function() {
+                    if (typeof echarts !== 'undefined') {
+                        clearInterval(checkInterval);
+                        console.log("echarts库加载完成，开始初始化图表");
+                        setTimeout(function() {
+                            initializeEverything();
+                        }, 200);
+                    } else if (window.echartsReady === false) {
+                        clearInterval(checkInterval);
+                        console.error("ECharts最终加载失败");
+                        alert('图表库加载失败，请刷新页面重试');
+                    }
+                }, 100);
+            }
+            
+            // 保留原有的脚本检查逻辑作为备用
+            if (false) { // 禁用原逻辑
                 // 脚本标签存在但可能尚未加载完成，等待并轮询检查
                 var checkInterval = setInterval(function() {
                     if (typeof echarts !== 'undefined') {

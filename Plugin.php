@@ -182,6 +182,8 @@ class VisitorLoggerPro_Plugin implements Typecho_Plugin_Interface
             _t('是否启用访客统计功能')
         );
         $form->addInput($enableStats);
+
+
     }
 
     /**
