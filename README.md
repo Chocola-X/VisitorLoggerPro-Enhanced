@@ -62,8 +62,9 @@
 - 优雅的加载动画
 
 ## 页面预览
-![image](https://github.com/user-attachments/assets/873b080e-6e6b-4187-b58c-046168b83dcb)
-![image](https://github.com/user-attachments/assets/42d8bee6-56f3-4eca-9a3b-e4635d2faf62)
+<img width="2560" height="1270" alt="image" src="https://github.com/user-attachments/assets/ae35b642-5499-4440-ad4c-59ec9d3dbb58" />
+<img width="2560" height="1270" alt="image" src="https://github.com/user-attachments/assets/9bbbeff9-f046-4777-b897-d6e2b8d69542" />
+
 ![image](https://github.com/user-attachments/assets/f4c28629-39f9-4487-9cd4-4a0de2e48e0e)
 ![image](https://github.com/user-attachments/assets/1707d2b4-6cb5-4d48-8d9a-27634ef6fb3f)
 
