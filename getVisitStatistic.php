@@ -37,7 +37,7 @@ ini_set('log_errors', 1);
 if (!defined('__TYPECHO_ROOT_DIR__')) {
     define('__TYPECHO_ROOT_DIR__', dirname(__FILE__, 4));
     require_once __TYPECHO_ROOT_DIR__ . '/config.inc.php';
-    
+
     // 兼容不同版本的Typecho
     if (file_exists(__TYPECHO_ROOT_DIR__ . '/var/Typecho/Common.php')) {
         require_once __TYPECHO_ROOT_DIR__ . '/var/Typecho/Common.php';
@@ -135,7 +135,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' || $_SERVER['REQUEST_METHOD'] === 'GET
         try {
             // 测试表是否存在
             $tableExists = $db->fetchRow($db->select()->from($prefix . 'visitor_log')->limit(1));
-            
+
             if ($tableExists === false) {
                 throw new Exception("访问日志表不存在");
             }
@@ -144,7 +144,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' || $_SERVER['REQUEST_METHOD'] === 'GET
             ob_end_clean();
             header('HTTP/1.1 500 Internal Server Error');
             echo json_encode([
-                'error' => '数据表访问错误', 
+                'error' => '数据表访问错误',
                 'message' => $e->getMessage(),
                 'debug_info' => 'Failed to access visitor_log table'
             ], JSON_UNESCAPED_UNICODE);
@@ -184,7 +184,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' || $_SERVER['REQUEST_METHOD'] === 'GET
                 ->group('country')
                 ->order('count', Typecho_Db::SORT_DESC)
         );
-        
+
         $countryData = [];
         $provinceData = [];
         $totalCountries = 0;
@@ -230,19 +230,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' || $_SERVER['REQUEST_METHOD'] === 'GET
         arsort($countryData);
         arsort($provinceData);
         arsort($routeCounts);
-        
+
         // 保存完整数据副本
         $allCountryData = $countryData;
         $allProvinceData = $provinceData;
-        
+
         // 只保留前30个国家/地区（确保不过滤掉任何数据）
         $countryData = array_slice($countryData, 0, 30, true);
-        
+
         // 只保留前30个省份（确保不过滤掉任何数据）
         $provinceData = array_slice($provinceData, 0, 30, true);
-        
-        // 只保留前10个路由
-        $routeCounts = array_slice($routeCounts, 0, 10, true);
+
+        // 只保留前20个路由
+        $routeCounts = array_slice($routeCounts, 0, 20, true);
 
         $result = [
             'countryData' => $countryData,
@@ -264,7 +264,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' || $_SERVER['REQUEST_METHOD'] === 'GET
         exit;
     } catch (Exception $e) {
         error_log('Error in getVisitStatistic.php: ' . $e->getMessage());
-        
+
         // 在输出前再次清理缓冲区，并发送响应
         ob_end_clean();
         header('HTTP/1.1 500 Internal Server Error');

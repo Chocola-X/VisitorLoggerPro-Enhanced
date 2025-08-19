@@ -9,7 +9,7 @@ if (!defined('__TYPECHO_ROOT_DIR__')) {
  * 
  * @package VisitorLoggerPro
  * @author 璇
- * @version 2.1.3
+ * @version 2.2.7
  * @link https://blog.ybyq.wang
  */
 
@@ -75,6 +75,7 @@ class VisitorLoggerPro_Plugin implements Typecho_Plugin_Interface
             `country` VARCHAR(100),
             `region` VARCHAR(100),
             `city` VARCHAR(100),
+            `user_agent` TEXT,
             `time` DATETIME DEFAULT NULL
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8;";
         // ********如果提示UNSIGNED 或 AUTO_INCREMENT 或 ENGINE的相关错误，将上述代码替换成以下代码********
@@ -90,6 +91,24 @@ class VisitorLoggerPro_Plugin implements Typecho_Plugin_Interface
 
         try {
             $db->query($sql);
+
+            // 检查是否需要添加user_agent字段（用于升级现有安装）
+            try {
+                $columns = $db->fetchAll("SHOW COLUMNS FROM `{$prefix}visitor_log`");
+                $hasUserAgent = false;
+                foreach ($columns as $column) {
+                    if ($column['Field'] === 'user_agent') {
+                        $hasUserAgent = true;
+                        break;
+                    }
+                }
+
+                if (!$hasUserAgent) {
+                    $db->query("ALTER TABLE `{$prefix}visitor_log` ADD COLUMN `user_agent` TEXT AFTER `city`");
+                }
+            } catch (Exception $e) {
+                // 如果添加字段失败，继续运行（可能是权限问题或数据库不支持）
+            }
         } catch (Exception $e) {
             throw new Typecho_Plugin_Exception('创建访客日志表或IP地址记录表失败: ' . $e->getMessage());
         }
@@ -102,6 +121,7 @@ class VisitorLoggerPro_Plugin implements Typecho_Plugin_Interface
         Typecho_Plugin::factory('Widget_Archive')->header = array('VisitorLoggerPro_Plugin', 'logVisitorInfo');
 
         Helper::addPanel(1, 'VisitorLoggerPro/panel.php', '访客日志', '查看访客日志', 'administrator');
+        Helper::addPanel(2, 'VisitorLoggerPro/trend.php', '趋势分析', '访客趋势分析', 'administrator');
 
         return '插件已激活，访客日志功能已启用。';
     }
@@ -117,6 +137,7 @@ class VisitorLoggerPro_Plugin implements Typecho_Plugin_Interface
     public static function deactivate()
     {
         Helper::removePanel(1, 'VisitorLoggerPro/panel.php');
+        Helper::removePanel(2, 'VisitorLoggerPro/trend.php');
         Helper::removeAction('visitor-stats-api');
         return '插件已禁用，访客日志功能已停用。';
     }
@@ -166,7 +187,7 @@ class VisitorLoggerPro_Plugin implements Typecho_Plugin_Interface
             array('ip2region' => _t('ip2region数据库'), 'cz88' => _t('纯真数据库')),
             'cz88',
             'IPV4数据库选项',
-            '介绍：此项是选择IPV4类型的数据库！本插件基于XQLocation进行开发'
+            _t('<strong>纯真数据库(cz88):</strong> 更新勤快，数据详尽，但可能包含一些非标准信息（如"网吧"），插件已做过滤处理。<br><strong>ip2region数据库:</strong> 查询速度快，格式标准统一，准确性高。推荐使用。')
         );
         $form->addInput($ipv4db);
 
@@ -182,8 +203,6 @@ class VisitorLoggerPro_Plugin implements Typecho_Plugin_Interface
             _t('是否启用访客统计功能')
         );
         $form->addInput($enableStats);
-
-
     }
 
     /**
@@ -344,6 +363,7 @@ class VisitorLoggerPro_Plugin implements Typecho_Plugin_Interface
             'country' => $location['country'] ?? 'Unknown',
             'region' => $location['region'] ?? 'Unknown',
             'city' => $location['city'] ?? 'Unknown',
+            'user_agent' => $_SERVER['HTTP_USER_AGENT'] ?? '',
             'time' => date('Y-m-d H:i:s')
         )));
     }

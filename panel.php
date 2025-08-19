@@ -1,7 +1,12 @@
 <?php
-require_once 'common.php';
-require_once 'header.php';
-require_once 'menu.php';
+if (!defined('__TYPECHO_ROOT_DIR__')) exit;
+
+// 引入 Typecho 后台模板
+if (!defined('__TYPECHO_ADMIN__')) {
+    include 'common.php';
+}
+include 'header.php';
+include 'menu.php';
 
 $page = isset($_GET['page']) ? intval($_GET['page']) : 1;
 $pageSize = 10;
@@ -186,8 +191,8 @@ $routeStats = array_values($routeStats);
                         const element = document.getElementById(id);
                         if (element) {
                             element.style.width = '100%';
-                            element.style.height = '300px';
-                            debugLog(`设置 ${id} 尺寸为 width: 100%, height: 300px`);
+                            element.style.height = '220px';
+                            debugLog(`设置 ${id} 尺寸为 width: 100%, height: 220px`);
                         }
                     });
 
@@ -319,52 +324,99 @@ $routeStats = array_values($routeStats);
                                         return;
                                     }
 
+                                    // 为饼图定义丰富的颜色方案
+                                    const pieColors = [
+                                        '#3498db', '#e74c3c', '#f39c12', '#27ae60', '#9b59b6',
+                                        '#1abc9c', '#e67e22', '#34495e', '#f1c40f', '#95a5a6',
+                                        '#2ecc71', '#e91e63', '#ff9800', '#607d8b', '#8bc34a'
+                                    ];
+
                                     const option = {
+                                        backgroundColor: type === 'pie' ? {
+                                            type: 'radial',
+                                            x: 0.5,
+                                            y: 0.5,
+                                            r: 0.8,
+                                            colorStops: [{
+                                                offset: 0,
+                                                color: 'rgba(255, 255, 255, 1)'
+                                            }, {
+                                                offset: 1,
+                                                color: 'rgba(248, 250, 252, 0.8)'
+                                            }]
+                                        } : 'transparent',
+                                        color: type === 'pie' ? pieColors : undefined,
                                         title: {
-                                            text: title,
+                                            text: title.includes('路由') ? title : '',
                                             left: 'center',
-                                            top: 0,
+                                            top: 5,
                                             textStyle: {
-                                                color: '#333',
-                                                fontSize: 16
+                                                color: '#2c3e50',
+                                                fontSize: 14,
+                                                fontWeight: 'bold'
                                             }
                                         },
                                         tooltip: {
                                             trigger: type === 'pie' ? 'item' : 'axis',
-                                            formatter: '{a} <br/>{b} : {c} ({d}%)'
+                                            formatter: type === 'pie' ? '{b}: {c} ({d}%)' : '{a} <br/>{b} : {c}'
                                         },
                                         legend: {
                                             show: type === 'pie',
                                             type: 'scroll',
-                                            orient: 'vertical',
-                                            right: 10,
-                                            top: 20,
-                                            bottom: 20
+                                            orient: chartData.length <= 8 ? 'vertical' : 'horizontal',
+                                            right: chartData.length <= 8 ? 5 : 'center',
+                                            top: chartData.length <= 8 ? 20 : 'bottom',
+                                            bottom: chartData.length <= 8 ? 10 : 5,
+                                            left: chartData.length <= 8 ? undefined : 'center',
+                                            itemWidth: 12,
+                                            itemHeight: 8,
+                                            textStyle: {
+                                                fontSize: 10
+                                            }
                                         },
                                         series: [{
                                             name: title,
                                             type: type,
-                                            radius: type === 'pie' ? ['40%', '70%'] : undefined,
-                                            center: type === 'pie' ? ['40%', '50%'] : undefined,
+                                            radius: type === 'pie' ? (chartData.length <= 6 ? ['35%', '75%'] : ['45%', '80%']) : undefined,
+                                            center: type === 'pie' ? (chartData.length <= 6 ? ['50%', '50%'] : ['50%', '50%']) : undefined,
                                             data: chartData,
+                                            label: type === 'pie' ? {
+                                                show: true,
+                                                position: chartData.length <= 5 ? 'outside' : 'inside',
+                                                fontSize: chartData.length <= 5 ? 10 : 9,
+                                                formatter: chartData.length <= 5 ? '{b}\n{d}%' : '{d}%',
+                                                color: chartData.length <= 5 ? '#333' : '#fff'
+                                            } : undefined,
+                                            labelLine: type === 'pie' ? {
+                                                show: chartData.length <= 5,
+                                                length: 10,
+                                                length2: 6
+                                            } : undefined,
                                             itemStyle: {
-                                                borderRadius: type === 'pie' ? 10 : [4, 4, 0, 0]
+                                                borderRadius: type === 'pie' ? 8 : [4, 4, 0, 0],
+                                                borderColor: type === 'pie' ? '#fff' : undefined,
+                                                borderWidth: type === 'pie' ? 2 : 0,
+                                                shadowBlur: type === 'pie' ? 10 : 0,
+                                                shadowColor: type === 'pie' ? 'rgba(0, 0, 0, 0.1)' : undefined
                                             },
                                             emphasis: {
                                                 itemStyle: {
-                                                    shadowBlur: 10,
+                                                    shadowBlur: 15,
                                                     shadowOffsetX: 0,
-                                                    shadowColor: 'rgba(0, 0, 0, 0.5)'
-                                                }
+                                                    shadowColor: 'rgba(0, 0, 0, 0.4)',
+                                                    borderWidth: type === 'pie' ? 3 : 0
+                                                },
+                                                scale: type === 'pie' ? 1.05 : 1
                                             }
                                         }]
                                     };
 
                                     if (type === 'bar') {
                                         option.grid = {
-                                            left: '3%',
+                                            left: '8%',
                                             right: '4%',
-                                            bottom: '15%',
+                                            bottom: '35%',
+                                            top: title.includes('路由') ? '15%' : '5%',
                                             containLabel: true
                                         };
                                         option.xAxis = {
@@ -373,13 +425,43 @@ $routeStats = array_values($routeStats);
                                             axisLabel: {
                                                 interval: 0,
                                                 rotate: 45,
+                                                fontSize: 9,
                                                 formatter: function(value) {
                                                     return value.length > 15 ? value.substring(0, 15) + '...' : value;
                                                 }
                                             }
                                         };
                                         option.yAxis = {
-                                            type: 'value'
+                                            type: 'value',
+                                            axisLabel: {
+                                                fontSize: 10
+                                            }
+                                        };
+                                        // 为柱状图系列添加配置
+                                        option.series[0].itemStyle = {
+                                            color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [{
+                                                    offset: 0,
+                                                    color: '#3498db'
+                                                },
+                                                {
+                                                    offset: 1,
+                                                    color: '#2980b9'
+                                                }
+                                            ]),
+                                            borderRadius: [4, 4, 0, 0]
+                                        };
+                                        option.series[0].emphasis = {
+                                            itemStyle: {
+                                                color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [{
+                                                        offset: 0,
+                                                        color: '#e74c3c'
+                                                    },
+                                                    {
+                                                        offset: 1,
+                                                        color: '#c0392b'
+                                                    }
+                                                ])
+                                            }
                                         };
                                     }
 
@@ -528,12 +610,12 @@ $routeStats = array_values($routeStats);
                             debugLog('✅ 事件监听器绑定完成');
 
                             // --- 5. 初始加载数据 ---
-                            debugLog('🔄 初始化加载数据 - 点击最近7天按钮');
-                            const last7DaysBtn = document.getElementById('last7DaysBtn');
-                            if (last7DaysBtn) {
-                                last7DaysBtn.click();
+                            debugLog('🔄 初始化加载数据 - 点击今天按钮');
+                            const todayBtn = document.getElementById('todayBtn');
+                            if (todayBtn) {
+                                todayBtn.click();
                             } else {
-                                debugLog('❌ 找不到最近7天按钮');
+                                debugLog('❌ 找不到今天按钮');
                             }
 
                             // --- 6. 窗口大小调整 ---
@@ -645,6 +727,9 @@ $routeStats = array_values($routeStats);
         margin-bottom: 24px;
         box-shadow: 0 2px 12px rgba(0, 0, 0, 0.05);
         border: 1px solid #e2e8f0;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
     }
 
     .page-header h2 {
@@ -654,9 +739,72 @@ $routeStats = array_values($routeStats);
         font-weight: 600;
     }
 
+    .nav-links {
+        display: flex;
+        gap: 12px;
+    }
+
+    .nav-link {
+        padding: 8px 16px;
+        border: 1px solid #e2e8f0;
+        border-radius: 6px;
+        text-decoration: none;
+        color: #4a5568;
+        font-size: 14px;
+        font-weight: 500;
+        transition: all 0.3s;
+        background: #f8fafc;
+    }
+
+    .nav-link:hover {
+        background: #e2e8f0;
+        color: #2c3e50;
+    }
+
+    .nav-link.active {
+        background: #3498db;
+        color: white;
+        border-color: #3498db;
+    }
+
+    .info-panel {
+        background: #fff;
+        border-radius: 12px;
+        padding: 20px;
+        margin-bottom: 24px;
+        box-shadow: 0 2px 12px rgba(0, 0, 0, 0.05);
+        border: 1px solid #e2e8f0;
+    }
+
+    .info-header h3 {
+        color: #2c3e50;
+        margin: 0 0 12px 0;
+        font-size: 16px;
+        font-weight: 600;
+    }
+
+    .info-content {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    .db-info {
+        padding: 8px 12px;
+        background: #f8fafc;
+        border-radius: 6px;
+        font-size: 14px;
+        line-height: 1.5;
+        border-left: 4px solid #3498db;
+    }
+
+    .db-info strong {
+        color: #2c3e50;
+    }
+
     .content-wrapper {
         display: grid;
-        grid-template-columns: minmax(800px, 1fr) minmax(400px, 1fr);
+        grid-template-columns: minmax(900px, 2fr) minmax(300px, 1fr);
         gap: 24px;
         align-items: start;
     }
@@ -671,7 +819,7 @@ $routeStats = array_values($routeStats);
         display: grid;
         grid-template-columns: repeat(3, 1fr);
         gap: 24px;
-        margin-bottom: 24px;
+        /* margin-bottom: 24px; */
     }
 
     .action-form {
@@ -780,22 +928,37 @@ $routeStats = array_values($routeStats);
 
     .typecho-list-table th:nth-child(1),
     .typecho-list-table td:nth-child(1) {
-        width: 15%;
+        width: 12%;
     }
 
     .typecho-list-table th:nth-child(2),
     .typecho-list-table td:nth-child(2) {
-        width: 45%;
+        width: 25%;
     }
 
     .typecho-list-table th:nth-child(3),
     .typecho-list-table td:nth-child(3) {
-        width: 20%;
+        width: 15%;
     }
 
     .typecho-list-table th:nth-child(4),
     .typecho-list-table td:nth-child(4) {
-        width: 20%;
+        width: 30%;
+        max-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        cursor: help;
+        position: relative;
+    }
+
+    .typecho-list-table td:nth-child(4):hover {
+        background-color: #f0f8ff;
+    }
+
+    .typecho-list-table th:nth-child(5),
+    .typecho-list-table td:nth-child(5) {
+        width: 18%;
     }
 
     .typecho-list-table tr:hover {
@@ -820,40 +983,60 @@ $routeStats = array_values($routeStats);
 
     .chart-container {
         flex: 1;
-        min-height: 300px;
-        background: #fff;
-        border-radius: 8px;
-        padding: 16px;
+        min-height: 260px;
+        background: linear-gradient(135deg, #fff 0%, #f8fafc 100%);
+        border-radius: 12px;
+        padding: 8px;
         border: 1px solid #e2e8f0;
         position: relative;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+        transition: all 0.3s ease;
+        overflow: hidden;
+    }
+
+    .chart-container::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 2px;
+        background: linear-gradient(90deg, #3498db, #e74c3c, #f39c12, #27ae60);
+        opacity: 0.6;
+    }
+
+    .chart-container:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(0, 0, 0, 0.1);
     }
 
     .chart-header {
         display: flex;
         justify-content: space-between;
         align-items: center;
-        margin-bottom: 16px;
+        margin-bottom: 8px;
+        padding: 4px 0;
     }
 
     .chart-title {
-        font-size: 14px;
+        font-size: 13px;
         font-weight: 600;
         color: #2c3e50;
     }
 
     .chart-tabs {
         display: flex;
-        gap: 8px;
+        gap: 4px;
     }
 
     .chart-tab {
-        padding: 4px 8px;
+        padding: 3px 6px;
         border: 1px solid #e2e8f0;
-        border-radius: 4px;
+        border-radius: 3px;
         background: #fff;
         color: #4a5568;
         cursor: pointer;
-        font-size: 12px;
+        font-size: 11px;
         transition: all 0.3s;
     }
 
@@ -864,13 +1047,13 @@ $routeStats = array_values($routeStats);
     }
 
     .chart-content {
-        height: calc(100% - 40px);
+        height: calc(100% - 32px);
         width: 100%;
     }
 
     .list-content {
         display: none;
-        height: calc(100% - 40px);
+        height: calc(100% - 32px);
         overflow: auto;
     }
 
@@ -953,13 +1136,13 @@ $routeStats = array_values($routeStats);
         border-color: #3498db;
     }
 
-    @media (max-width: 1600px) {
+    @media (max-width: 1400px) {
         .content-wrapper {
             grid-template-columns: 1fr;
         }
 
         .chart-container {
-            min-height: 300px;
+            min-height: 250px;
         }
     }
 </style>
@@ -968,7 +1151,13 @@ $routeStats = array_values($routeStats);
     <div class="body container">
         <div class="page-header">
             <h2>访客日志</h2>
+            <div class="nav-links">
+                <a href="?panel=VisitorLoggerPro%2Fpanel.php" class="nav-link active">访客日志</a>
+                <a href="?panel=VisitorLoggerPro%2Ftrend.php" class="nav-link">趋势分析</a>
+            </div>
         </div>
+
+
 
         <div class="content-wrapper">
             <div class="left-section">
@@ -1014,13 +1203,14 @@ $routeStats = array_values($routeStats);
                                 <th>IP</th>
                                 <th>访问路由</th>
                                 <th>访问地点</th>
+                                <th>User-Agent</th>
                                 <th>时间</th>
                             </tr>
                         </thead>
                         <tbody>
                             <?php if (empty($logs)): ?>
                                 <tr>
-                                    <td colspan="4">暂无记录</td>
+                                    <td colspan="5">暂无记录</td>
                                 </tr>
                             <?php else: ?>
                                 <?php foreach ($logs as $log): ?>
@@ -1028,6 +1218,14 @@ $routeStats = array_values($routeStats);
                                         <td><?php echo htmlspecialchars($log['ip']); ?></td>
                                         <td><?php echo htmlspecialchars(urldecode($log['route'])); ?></td>
                                         <td><?php echo htmlspecialchars($log['country']); ?></td>
+                                        <td title="<?php echo htmlspecialchars($log['user_agent'] ?? ''); ?>"><?php
+                                                                                                                $userAgent = $log['user_agent'] ?? '';
+                                                                                                                if (strlen($userAgent) > 50) {
+                                                                                                                    echo htmlspecialchars(substr($userAgent, 0, 50) . '...');
+                                                                                                                } else {
+                                                                                                                    echo htmlspecialchars($userAgent);
+                                                                                                                }
+                                                                                                                ?></td>
                                         <td><?php echo htmlspecialchars($log['time']); ?></td>
                                     </tr>
                                 <?php endforeach; ?>
