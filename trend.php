@@ -131,8 +131,8 @@ include 'menu.php';
                     const element = document.getElementById('trendChartContent');
                     if (element) {
                         element.style.width = '100%';
-                        element.style.height = '400px';
-                        debugLog('设置趋势图表尺寸为 width: 100%, height: 400px');
+                        element.style.height = '600px';
+                        debugLog('设置趋势图表尺寸为 width: 100%, height: 600px');
                     }
 
                     // 强制延迟初始化以确保容器已经渲染
@@ -245,6 +245,74 @@ include 'menu.php';
                                     const uniqueVisitorCounts = data.map(item => item.unique_visitor_count);
                                     const sessionCounts = data.map(item => item.session_count);
 
+                                    // 分别计算PV和其他指标的数据范围
+                                    const pvMax = Math.max(...pvCounts);
+                                    const otherValues = [...uniqueIpCounts, ...uniqueVisitorCounts, ...sessionCounts];
+                                    const otherMax = Math.max(...otherValues);
+                                    
+                                    // 左轴（IP、UV、SV）配置 - 刚好比最大值大的整数
+                                    let leftAxisConfig = {};
+                                    
+                                    // 计算刚好比最大值大的整数作为最大值
+                                    const leftMaxValue = Math.ceil(otherMax) + 1;
+                                    
+                                    // 根据最大值动态计算合适的间隔
+                                    let interval;
+                                    if (leftMaxValue <= 10) {
+                                        interval = 1;
+                                    } else if (leftMaxValue <= 50) {
+                                        interval = 5;
+                                    } else if (leftMaxValue <= 100) {
+                                        interval = 10;
+                                    } else if (leftMaxValue <= 200) {
+                                        interval = 20;
+                                    } else if (leftMaxValue <= 500) {
+                                        interval = 50;
+                                    } else {
+                                        interval = 100;
+                                    }
+                                    
+                                    leftAxisConfig = {
+                                        min: 0,
+                                        max: leftMaxValue,
+                                        interval: interval
+                                    };
+                                    
+                                    // 右轴（PV）配置
+                                    let rightAxisConfig = {};
+                                    
+                                    if (pvMax <= 100) {
+                                        rightAxisConfig = {
+                                            min: 0,
+                                            max: Math.max(120, Math.ceil(pvMax * 1.2)),
+                                            interval: 10
+                                        };
+                                    } else if (pvMax <= 500) {
+                                        rightAxisConfig = {
+                                            min: 0,
+                                            max: Math.max(600, Math.ceil(pvMax * 1.2)),
+                                            interval: 50
+                                        };
+                                    } else if (pvMax <= 1000) {
+                                        rightAxisConfig = {
+                                            min: 0,
+                                            max: Math.ceil(pvMax * 1.15),
+                                            interval: 100
+                                        };
+                                    } else if (pvMax <= 5000) {
+                                        rightAxisConfig = {
+                                            min: 0,
+                                            max: Math.ceil(pvMax * 1.1),
+                                            interval: 500
+                                        };
+                                    } else {
+                                        rightAxisConfig = {
+                                            min: 0,
+                                            max: Math.ceil(pvMax * 1.1),
+                                            interval: 1000
+                                        };
+                                    }
+
                                     const option = {
                                         title: {
                                             text: '访客统计趋势分析',
@@ -274,13 +342,13 @@ include 'menu.php';
                                         legend: {
                                             top: 45,
                                             left: 'center',
-                                            data: ['PV(页面浏览量)', '独立IP数', '独立访客数(UV)', '访问次数']
+                                            data: ['浏览量(PV)', 'IP数', '访客数(UV)', '访问数(SV)']
                                         },
                                         grid: {
-                                            left: '10%',
-                                            right: '10%',
-                                            bottom: '20%',
-                                            top: '20%',
+                                            left: '8%',
+                                            right: '8%',
+                                            bottom: '15%',
+                                            top: '18%',
                                             containLabel: true
                                         },
                                         xAxis: {
@@ -295,53 +363,86 @@ include 'menu.php';
                                         },
                                         yAxis: [{
                                             type: 'value',
-                                            name: '数量',
+                                            name: 'IP/访客/访问数',
                                             position: 'left',
+                                            min: leftAxisConfig.min,
+                                            max: leftAxisConfig.max,
+                                            interval: leftAxisConfig.interval,
                                             axisLabel: {
-                                                formatter: '{value}'
+                                                formatter: function(value) {
+                                                    if (value >= 1000) {
+                                                        return (value / 1000).toFixed(1) + 'K';
+                                                    }
+                                                    return value;
+                                                },
+                                                color: '#3498db'
+                                            },
+                                            splitLine: {
+                                                show: true,
+                                                lineStyle: {
+                                                    type: 'dashed',
+                                                    color: '#e0e6ed',
+                                                    width: 1
+                                                }
+                                            },
+                                            axisTick: {
+                                                show: true,
+                                                inside: false,
+                                                length: 4
+                                            },
+                                            axisLine: {
+                                                show: true,
+                                                lineStyle: {
+                                                    color: '#3498db'
+                                                }
+                                            }
+                                        }, {
+                                            type: 'value',
+                                            name: '浏览量(PV)',
+                                            position: 'right',
+                                            min: rightAxisConfig.min,
+                                            max: rightAxisConfig.max,
+                                            interval: rightAxisConfig.interval,
+                                            axisLabel: {
+                                                formatter: function(value) {
+                                                    if (value >= 1000) {
+                                                        return (value / 1000).toFixed(1) + 'K';
+                                                    }
+                                                    return value;
+                                                },
+                                                color: '#e74c3c'
+                                            },
+                                            splitLine: {
+                                                show: false
+                                            },
+                                            axisTick: {
+                                                show: true,
+                                                inside: false,
+                                                length: 4
+                                            },
+                                            axisLine: {
+                                                show: true,
+                                                lineStyle: {
+                                                    color: '#e74c3c'
+                                                }
                                             }
                                         }],
                                         series: [{
-                                                name: 'PV(页面浏览量)',
+                                                name: 'IP数',
                                                 type: 'line',
-                                                data: pvCounts,
-                                                smooth: true,
-                                                symbol: 'circle',
-                                                symbolSize: 6,
-                                                lineStyle: {
-                                                    width: 3
-                                                },
-                                                itemStyle: {
-                                                    color: '#e74c3c'
-                                                },
-                                                areaStyle: {
-                                                    opacity: 0.1,
-                                                    color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [{
-                                                            offset: 0,
-                                                            color: '#e74c3c'
-                                                        },
-                                                        {
-                                                            offset: 1,
-                                                            color: '#ecf0f1'
-                                                        }
-                                                    ])
-                                                }
-                                            },
-                                            {
-                                                name: '独立IP数',
-                                                type: 'line',
+                                                yAxisIndex: 0, // 使用左侧Y轴
                                                 data: uniqueIpCounts,
                                                 smooth: true,
                                                 symbol: 'diamond',
                                                 symbolSize: 6,
                                                 lineStyle: {
-                                                    width: 3
+                                                    width: 2
                                                 },
                                                 itemStyle: {
                                                     color: '#3498db'
                                                 },
                                                 areaStyle: {
-                                                    opacity: 0.1,
+                                                    opacity: 0.15,
                                                     color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [{
                                                             offset: 0,
                                                             color: '#3498db'
@@ -354,20 +455,21 @@ include 'menu.php';
                                                 }
                                             },
                                             {
-                                                name: '独立访客数(UV)',
+                                                name: '访客数(UV)',
                                                 type: 'line',
+                                                yAxisIndex: 0, // 使用左侧Y轴
                                                 data: uniqueVisitorCounts,
                                                 smooth: true,
                                                 symbol: 'triangle',
                                                 symbolSize: 6,
                                                 lineStyle: {
-                                                    width: 3
+                                                    width: 2
                                                 },
                                                 itemStyle: {
                                                     color: '#27ae60'
                                                 },
                                                 areaStyle: {
-                                                    opacity: 0.1,
+                                                    opacity: 0.15,
                                                     color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [{
                                                             offset: 0,
                                                             color: '#27ae60'
@@ -380,23 +482,51 @@ include 'menu.php';
                                                 }
                                             },
                                             {
-                                                name: '访问次数',
+                                                name: '访问数(SV)',
                                                 type: 'line',
+                                                yAxisIndex: 0, // 使用左侧Y轴
                                                 data: sessionCounts,
                                                 smooth: true,
                                                 symbol: 'rect',
                                                 symbolSize: 6,
                                                 lineStyle: {
-                                                    width: 3
+                                                    width: 2
                                                 },
                                                 itemStyle: {
                                                     color: '#f39c12'
                                                 },
                                                 areaStyle: {
-                                                    opacity: 0.1,
+                                                    opacity: 0.15,
                                                     color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [{
                                                             offset: 0,
                                                             color: '#f39c12'
+                                                        },
+                                                        {
+                                                            offset: 1,
+                                                            color: '#ecf0f1'
+                                                        }
+                                                    ])
+                                                }
+                                            },
+                                            {
+                                                name: '浏览量(PV)',
+                                                type: 'line',
+                                                yAxisIndex: 1, // 使用右侧Y轴
+                                                data: pvCounts,
+                                                smooth: true,
+                                                symbol: 'circle',
+                                                symbolSize: 6,
+                                                lineStyle: {
+                                                    width: 2
+                                                },
+                                                itemStyle: {
+                                                    color: '#e74c3c'
+                                                },
+                                                areaStyle: {
+                                                    opacity: 0.1,
+                                                    color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [{
+                                                            offset: 0,
+                                                            color: '#e74c3c'
                                                         },
                                                         {
                                                             offset: 1,
@@ -720,7 +850,7 @@ include 'menu.php';
     }
 
     .chart-container {
-        height: 450px;
+        height: 650px;
         width: 100%;
     }
 
@@ -991,19 +1121,19 @@ include 'menu.php';
         <div class="trend-section">
             <div class="stats-summary" id="statsSummary" style="display: none;">
                 <div class="stats-item">
-                    <span class="stats-label">PV(页面浏览量):</span>
+                    <span class="stats-label">浏览量(PV):</span>
                     <span class="stats-value" id="totalPv">-</span>
                 </div>
                 <div class="stats-item">
-                    <span class="stats-label">独立IP数:</span>
+                    <span class="stats-label">IP数:</span>
                     <span class="stats-value" id="totalUniqueIps">-</span>
                 </div>
                 <div class="stats-item">
-                    <span class="stats-label">独立访客数(UV):</span>
+                    <span class="stats-label">访客数(UV):</span>
                     <span class="stats-value" id="totalUniqueVisitors">-</span>
                 </div>
                 <div class="stats-item">
-                    <span class="stats-label">访问次数:</span>
+                    <span class="stats-label">访问数(SV):</span>
                     <span class="stats-value" id="totalSessions">-</span>
                 </div>
             </div>

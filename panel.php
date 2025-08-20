@@ -912,7 +912,7 @@ $routeStats = array_values($routeStats);
         padding: 12px 16px;
         text-align: left;
         border-bottom: 1px solid #e2e8f0;
-        white-space: nowrap;
+        /*white-space: nowrap;*/
         overflow: hidden;
         text-overflow: ellipsis;
     }
@@ -933,7 +933,7 @@ $routeStats = array_values($routeStats);
 
     .typecho-list-table th:nth-child(2),
     .typecho-list-table td:nth-child(2) {
-        width: 25%;
+        width: 15%;
     }
 
     .typecho-list-table th:nth-child(3),
@@ -958,7 +958,7 @@ $routeStats = array_values($routeStats);
 
     .typecho-list-table th:nth-child(5),
     .typecho-list-table td:nth-child(5) {
-        width: 18%;
+        width: 12%;
     }
 
     .typecho-list-table tr:hover {
@@ -1104,7 +1104,7 @@ $routeStats = array_values($routeStats);
     }
 
     .typecho-pager {
-        margin-top: 24px;
+        /*margin-top: 24px;*/
         display: flex;
         justify-content: center;
         padding-bottom: 20px;
