@@ -62,8 +62,9 @@
 - 优雅的加载动画
 
 ## 页面预览
-![image](https://github.com/user-attachments/assets/873b080e-6e6b-4187-b58c-046168b83dcb)
-![image](https://github.com/user-attachments/assets/42d8bee6-56f3-4eca-9a3b-e4635d2faf62)
+<img width="2560" height="1270" alt="image" src="https://github.com/user-attachments/assets/ae35b642-5499-4440-ad4c-59ec9d3dbb58" />
+<img width="2560" height="1270" alt="image" src="https://github.com/user-attachments/assets/9bbbeff9-f046-4777-b897-d6e2b8d69542" />
+
 ![image](https://github.com/user-attachments/assets/f4c28629-39f9-4487-9cd4-4a0de2e48e0e)
 ![image](https://github.com/user-attachments/assets/1707d2b4-6cb5-4d48-8d9a-27634ef6fb3f)
 
@@ -241,7 +242,7 @@ MIT License
 - 添加详细的加载状态日志，便于问题排查
 - 优化错误处理机制，提供友好的用户提示
 
-## v2.1.1 (2024-06-21)
+## v2.1.1 (2025-06-21)
 
 ### 优化
 - 移除本地chart.js文件（约200KB），减少插件体积
@@ -250,7 +251,7 @@ MIT License
 ### 修复
 - 删除panel.php中对本地chart.js的引用
 
-## v2.1.0 (2024-06-18)
+## v2.1.0 (2025-06-18)
 
 ### 前台优化
 - 新增API端点(getVisitStatistic.php)处理数据聚合
@@ -272,7 +273,7 @@ MIT License
 - 修复内容解码错误(ERR_CONTENT_DECODING_FAILED)
 - 修复SQL错误(Unknown column 'province')
 
-## v2.0.2 (2024-06-13)
+## v2.0.2 (2025-06-13)
 
 ### 功能增强
 - **新增后台忽略IP名单功能**，支持批量添加和删除
@@ -286,7 +287,7 @@ MIT License
 - 修复日期选择器在移动端的显示问题
 - 优化数据库查询，减少资源占用
 
-## v2.0.1 (2024-05-15)
+## v2.0.1 (2025-05-15)
 
 ### 功能改进
 - 修复时区问题：将数据库time字段从TIMESTAMP改为DATETIME类型
@@ -294,7 +295,7 @@ MIT License
 - 优化数据迁移处理，自动转换已有记录的时区
 - **添加适配器（adapter.php），实现原版插件与当前插件的无缝衔接**
 
-## v2.0.0 (2024-04-23)
+## v2.0.0 (2025-04-23)
 
 ### 主要功能
 - 初始版本发布
