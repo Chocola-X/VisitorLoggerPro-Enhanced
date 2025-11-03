@@ -5,6 +5,10 @@
 新增功能有：
  - **添加插件界面背景图，并可自定义** 默认图片来源是我的猫娘乐园图片API，可以自行更换
  - **数据面板透明化，可以自己调节颜色** 默认是白色半透明卡片，可以根据需要调节颜色
+
+效果图：
+<img src="https://teachermate.oss-cn-qingdao.aliyuncs.com/NNV5S-1762162891955-x_20251103_172446.png" />
+<img src="https://teachermate.oss-cn-qingdao.aliyuncs.com/pzWZj-1762162900258-x_20251103_172519.png" />
  
 修复的问题有：
  - 修复了原版插件静态文件缺失和相对路径错误的问题，补充了对应的本地静态文件。
