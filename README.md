@@ -1,5 +1,16 @@
-# Typecho 访客统计插件-VisitorLogger-Pro
-这是一个为 Typecho 博客系统开发的访客统计插件，基于原版的VistorLogger修改版本。该插件提供了详细的访问统计功能，包括访问国家/地区统计、IP分布等信息，并进行了隐私保护处理。
+# Typecho 访客统计插件-VisitorLogger-Pro-Enhanced
+这是一个为 Typecho 博客系统开发的访客统计插件，基于VistorLoggerPro进行修改增强。
+除了原有功能外，额外增加了插件个性化功能，满足我自己的使用需求。
+
+新增功能有：
+ - **添加插件界面背景图，并可自定义**
+ - **数据面板透明化，可以自己调节颜色**
+
+除新增功能外，与原版的VistorLoggerPro没有别的差别。
+
+以下为原版VistorLoggerPro的README:
+
+该插件提供了详细的访问统计功能，包括访问国家/地区统计、IP分布等信息，并进行了隐私保护处理。
 
 ## 功能特点
 
