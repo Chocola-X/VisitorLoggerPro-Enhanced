@@ -8,6 +8,13 @@ if (!defined('__TYPECHO_ADMIN__')) {
 include 'header.php';
 include 'menu.php';
 
+// 获取配置的背景URL（带默认值）
+$backgroundUrl = Helper::options()->plugin('VisitorLoggerPro')->backgroundUrl ?: 'https://pic.nekopara.uk/?format=webp';
+
+// 获取配置的卡片背景色（带默认值）
+$backgroundColour = Helper::options()->plugin('VisitorLoggerPro')->backgroundColour ?: '#ffffffc4';
+
+
 $page = isset($_GET['page']) ? intval($_GET['page']) : 1;
 $pageSize = 10;
 
@@ -742,8 +749,13 @@ function initializeApp() {
 <style>
     .main {
         padding: 20px;
-        background-color: #f5f7fa;
         min-height: 100vh;
+        background-image: url('<?php echo $backgroundUrl; ?>');
+        background-repeat: no-repeat;
+        background-attachment: fixed;
+        background-position: center center;
+        background-attachment: fixed;
+        background-size: cover;
     }
 
     .body.container {
@@ -753,7 +765,7 @@ function initializeApp() {
     }
 
     .page-header {
-        background: #fff;
+        background: <?php echo $backgroundColour; ?>;
         border-radius: 12px;
         padding: 20px;
         margin-bottom: 24px;
@@ -785,7 +797,7 @@ function initializeApp() {
         font-size: 14px;
         font-weight: 500;
         transition: all 0.3s;
-        background: #f8fafc;
+        background: #f8fafcb5;
     }
 
     .nav-link:hover {
@@ -823,7 +835,7 @@ function initializeApp() {
 
     .db-info {
         padding: 8px 12px;
-        background: #f8fafc;
+        background: #f8fafcb5;
         border-radius: 6px;
         font-size: 14px;
         line-height: 1.5;
@@ -855,7 +867,7 @@ function initializeApp() {
     }
 
     .action-form {
-        background: #fff;
+        background: <?php echo $backgroundColour; ?>;
         padding: 20px;
         border-radius: 12px;
         box-shadow: 0 2px 12px rgba(0, 0, 0, 0.05);
@@ -909,7 +921,7 @@ function initializeApp() {
     }
 
     .date-btn {
-        background-color: #f8fafc;
+        background-color: #f8fafcb5;
         text-align: center;
         cursor: pointer;
     }
@@ -921,7 +933,7 @@ function initializeApp() {
     }
 
     .logs-section {
-        background: #fff;
+        background: <?php echo $backgroundColour; ?>;
         border-radius: 12px;
         padding: 24px;
         box-shadow: 0 2px 12px rgba(0, 0, 0, 0.05);
@@ -950,7 +962,6 @@ function initializeApp() {
     }
 
     .typecho-list-table th {
-        background-color: #f8fafc;
         font-weight: 600;
         color: #4a5568;
         position: sticky;
@@ -985,7 +996,7 @@ function initializeApp() {
     }
 
     .typecho-list-table td:nth-child(4):hover {
-        background-color: #f0f8ff;
+        background-color: #f0f8ffa3;
     }
 
     .typecho-list-table th:nth-child(5),
@@ -994,7 +1005,7 @@ function initializeApp() {
     }
 
     .typecho-list-table tr:hover {
-        background-color: #f8fafc;
+        background-color: #f8fafcb5;
     }
 
     .typecho-list-table tr:last-child td {
@@ -1002,7 +1013,7 @@ function initializeApp() {
     }
 
     .stats-section {
-        background: #fff;
+        background: <?php echo $backgroundColour; ?>;
         border-radius: 12px;
         padding: 24px;
         box-shadow: 0 2px 12px rgba(0, 0, 0, 0.05);
@@ -1016,7 +1027,7 @@ function initializeApp() {
     .chart-container {
         flex: 1;
         min-height: 260px;
-        background: linear-gradient(135deg, #fff 0%, #f8fafc 100%);
+        background: <?php echo $backgroundColour; ?>;
         border-radius: 12px;
         padding: 8px;
         border: 1px solid #e2e8f0;
