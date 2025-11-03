@@ -5,12 +5,12 @@ if (!defined('__TYPECHO_ROOT_DIR__')) {
 }
 
 /**
- * 访客统计插件
+ * 访客统计插件-美化版，基于<a href="https://blog.ybyq.wang" target="_blank">璇</a>的插件进行二次开发<a href="https://github.com/Chocola-X/VisitorLoggerPro-Enhanced" target="_blank">项目地址&使用帮助</a>
  * 
  * @package VisitorLoggerPro
- * @author 璇
+ * @author GTX690战术核显卡导弹
  * @version 2.2.8
- * @link https://blog.ybyq.wang
+ * @link https://www.nekopara.uk
  */
 
 // 加载兼容适配器
@@ -203,7 +203,27 @@ class VisitorLoggerPro_Plugin implements Typecho_Plugin_Interface
             _t('是否启用访客统计功能')
         );
         $form->addInput($enableStats);
+
+        /* 插件背景设置 */
+        $backgroundUrl = new Typecho_Widget_Helper_Form_Element_Text(
+            'backgroundUrl',
+            null,
+            'https://pic.nekopara.uk/?format=webp', // 默认值
+            _t('插件背景设置'),
+            _t('可填写图片API的URL（如随机图片API）或具体图片的URL直链。默认使用猫娘乐园图片API')
+        );
+        $form->addInput($backgroundUrl);
+
+        /* 插件卡片颜色设置 */
+        $backgroundColour = new Typecho_Widget_Helper_Form_Element_Text(
+            'backgroundColour',
+            null,
+            '#ffffffc4', // 默认值
+            _t('插件展示内容卡片颜色设置，采用HTML颜色代码')
+        );
+        $form->addInput($backgroundColour);
     }
+
 
     /**
      * 个人用户的配置面板

@@ -7,6 +7,14 @@ if (!defined('__TYPECHO_ADMIN__')) {
 }
 include 'header.php';
 include 'menu.php';
+
+// 获取配置的背景URL（带默认值）
+$backgroundUrl = Helper::options()->plugin('VisitorLoggerPro')->backgroundUrl ?: 'https://pic.nekopara.uk/?format=webp';
+
+
+// 获取配置的卡片背景色（带默认值）
+$backgroundColour = Helper::options()->plugin('VisitorLoggerPro')->backgroundColour ?: '#ffffffc4';
+
 ?>
 
 <!-- 智能加载ECharts：优先CDN，失败时自动回退到本地 -->
@@ -752,8 +760,13 @@ function initializeApp() {
 <style>
     .main {
         padding: 20px;
-        background-color: #f5f7fa;
         min-height: 100vh;
+        background-image: url('<?php echo $backgroundUrl; ?>');
+        background-repeat: no-repeat;
+        background-attachment: fixed;
+        background-position: center center;
+        background-attachment: fixed;
+        background-size: cover;
     }
 
     .body.container {
@@ -763,7 +776,7 @@ function initializeApp() {
     }
 
     .page-header {
-        background: #fff;
+        background: <?php echo $backgroundColour; ?>;
         border-radius: 12px;
         padding: 20px;
         margin-bottom: 24px;
@@ -810,7 +823,7 @@ function initializeApp() {
     }
 
     .trend-section {
-        background: #fff;
+        background: <?php echo $backgroundColour; ?>;
         border-radius: 12px;
         padding: 24px;
         box-shadow: 0 2px 12px rgba(0, 0, 0, 0.05);
@@ -818,7 +831,7 @@ function initializeApp() {
     }
 
     .controls-section {
-        background: #fff;
+        background: <?php echo $backgroundColour; ?>;
         border-radius: 12px;
         padding: 20px;
         margin-bottom: 24px;
@@ -897,9 +910,7 @@ function initializeApp() {
         gap: 20px;
         margin-bottom: 20px;
         padding: 16px;
-        background: #f8fafc;
         border-radius: 8px;
-        border: 1px solid #e2e8f0;
         flex-wrap: wrap;
     }
 
@@ -925,7 +936,7 @@ function initializeApp() {
 
     /* 指标说明区域样式 */
     .metrics-explanation {
-        background: #fff;
+        background: <?php echo $backgroundColour; ?>;
         border-radius: 12px;
         padding: 24px;
         margin-top: 24px;
@@ -961,7 +972,7 @@ function initializeApp() {
     }
 
     .metric-card {
-        background: #f8fafc;
+        background: #f8fafcbd;
         border: 1px solid #e2e8f0;
         border-radius: 10px;
         padding: 20px;
@@ -1015,7 +1026,7 @@ function initializeApp() {
     }
 
     .technical-notes {
-        background: #f8fafc;
+        background: #f8fafcbd;
         border: 1px solid #e2e8f0;
         border-radius: 10px;
         padding: 20px;
