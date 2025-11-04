@@ -763,7 +763,6 @@ function initializeApp() {
         min-height: 100vh;
         background-image: url('<?php echo $backgroundUrl; ?>');
         background-repeat: no-repeat;
-        background-attachment: fixed;
         background-position: center center;
         background-attachment: fixed;
         background-size: cover;
