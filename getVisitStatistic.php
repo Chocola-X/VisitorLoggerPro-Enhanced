@@ -152,7 +152,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' || $_SERVER['REQUEST_METHOD'] === 'GET
         }
 
         // 使用缓存机制提高性能
-        $cacheKey = md5($startDate . $endDate);
+        $siteId = md5(__TYPECHO_ROOT_DIR__);
+        $cacheKey = md5($siteId . $startDate . $endDate);
         $cacheFile = sys_get_temp_dir() . '/visitor_stats_' . $cacheKey . '.json';
         $cacheExpire = 300; // 5分钟缓存
 
