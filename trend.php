@@ -36,7 +36,7 @@ document.querySelectorAll('.typecho-head-nav a[href*="panel=VisitorLoggerPro"]')
 <?php
 
 // 获取配置的背景URL（带默认值）
-$backgroundUrl = Helper::options()->plugin('VisitorLoggerPro')->backgroundUrl ?: 'https://pic.nekopara.uk/?format=webp';
+$backgroundUrl = Helper::options()->plugin('VisitorLoggerPro')->backgroundUrl ?: 'https://api.mikupara.com/api/h';
 if (!filter_var($backgroundUrl, FILTER_VALIDATE_URL) || !in_array(parse_url($backgroundUrl, PHP_URL_SCHEME), array('http', 'https'), true)) {
     $backgroundUrl = '';
 }

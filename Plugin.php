@@ -183,7 +183,7 @@ class VisitorLoggerPro_Plugin implements Typecho_Plugin_Interface
         $backgroundUrl = new Typecho_Widget_Helper_Form_Element_Text(
             'backgroundUrl',
             null,
-            'https://pic.nekopara.uk/?format=webp', // 默认值
+            'https://api.mikupara.com/api/h', // 默认值
             _t('插件背景设置'),
             _t('可填写图片API的URL（如随机图片API）或具体图片的URL直链。默认使用猫娘乐园图片API')
         );
