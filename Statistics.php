@@ -44,7 +44,7 @@ class VisitorLoggerPro_Statistics
                 ->where('time <= ?', $endDate)
         );
         $countries = self::groupCounts($db, 'country', $startDate, $endDate, 30);
-        $regions = self::groupCounts($db, 'region', $startDate, $endDate, 30);
+        $regions = self::groupCounts($db, 'region', $startDate, $endDate, 30, '中国');
         $routes = self::groupCounts($db, 'route', $startDate, $endDate, 20);
         $countryTotal = $db->fetchRow(
             $db->select(array('COUNT(DISTINCT country)' => 'total'))
@@ -59,7 +59,7 @@ class VisitorLoggerPro_Statistics
 
         return array(
             'countryData' => self::toMap($countries, 'country'),
-            'provinceData' => self::toMap($regions, 'region'),
+            'provinceData' => self::toProvinceMap($regions),
             'routeData' => self::toMap($routes, 'route', true),
             'totalVisits' => (int) ($total['total'] ?? 0),
             'totalCountries' => (int) ($countryTotal['total'] ?? 0)
@@ -143,16 +143,20 @@ class VisitorLoggerPro_Statistics
         );
     }
 
-    private static function groupCounts($db, $column, $startDate, $endDate, $limit)
+    private static function groupCounts($db, $column, $startDate, $endDate, $limit, $country = null)
     {
+        $query = $db->select($column, array('COUNT(id)' => 'count'))
+            ->from('table.visitor_log')
+            ->where('time >= ?', $startDate)
+            ->where('time <= ?', $endDate)
+            ->where($column . ' != ?', '')
+            ->where($column . ' != ?', 'Unknown');
+        if ($country !== null) {
+            $query->where('country = ?', $country);
+        }
+
         return $db->fetchAll(
-            $db->select($column, array('COUNT(id)' => 'count'))
-                ->from('table.visitor_log')
-                ->where('time >= ?', $startDate)
-                ->where('time <= ?', $endDate)
-                ->where($column . ' != ?', '')
-                ->where($column . ' != ?', 'Unknown')
-                ->group($column)
+            $query->group($column)
                 ->order('count', Typecho_Db::SORT_DESC)
                 ->limit($limit)
         );
@@ -164,6 +168,23 @@ class VisitorLoggerPro_Statistics
         foreach ($rows as $row) {
             $label = $decode ? urldecode($row[$key]) : $row[$key];
             $result[$label ?: '未知'] = (int) $row['count'];
+        }
+        return $result;
+    }
+
+    private static function toProvinceMap($rows)
+    {
+        $result = array();
+        $suffixes = '/(?:壮族自治区|回族自治区|维吾尔自治区|特别行政区|自治区|省|市)$/u';
+        foreach ($rows as $row) {
+            $label = preg_replace($suffixes, '', trim((string) $row['region']));
+            if ($label === '') {
+                $label = '未知';
+            }
+            if (!isset($result[$label])) {
+                $result[$label] = 0;
+            }
+            $result[$label] += (int) $row['count'];
         }
         return $result;
     }
