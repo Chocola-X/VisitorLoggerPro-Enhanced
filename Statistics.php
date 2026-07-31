@@ -51,7 +51,9 @@ class VisitorLoggerPro_Statistics
                 ->from('table.visitor_log')
                 ->where('time >= ?', $startDate)
                 ->where('time <= ?', $endDate)
-                ->where('country IS NOT NULL AND country != ?', '')
+                // Typecho 1.2 quotes NOT as a column name in raw conditions.
+                // The comparison also excludes NULL values in both MySQL and SQLite.
+                ->where('country != ?', '')
                 ->where('country != ?', 'Unknown')
         );
 
@@ -148,7 +150,7 @@ class VisitorLoggerPro_Statistics
                 ->from('table.visitor_log')
                 ->where('time >= ?', $startDate)
                 ->where('time <= ?', $endDate)
-                ->where($column . ' IS NOT NULL AND ' . $column . ' != ?', '')
+                ->where($column . ' != ?', '')
                 ->where($column . ' != ?', 'Unknown')
                 ->group($column)
                 ->order('count', Typecho_Db::SORT_DESC)

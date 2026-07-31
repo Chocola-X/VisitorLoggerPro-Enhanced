@@ -17,6 +17,12 @@ $currentIP = VisitorLoggerPro_Plugin::getIpAddress() ?: '';
 $options = Helper::options();
 $statsApiUrl = Typecho_Common::url('/action/visitor-stats-api?do=aggregate', $options->index);
 $pluginAssetUrl = rtrim($options->pluginUrl, '/') . '/VisitorLoggerPro';
+$pluginOptions = Helper::options()->plugin('VisitorLoggerPro');
+$resourceConfig = array(
+    'echartsSource' => isset($pluginOptions->echartsSource) && $pluginOptions->echartsSource === 'local' ? 'local' : 'cdn',
+    'echartsCdn' => 'https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js',
+    'echartsLocal' => $pluginAssetUrl . '/js/echarts.min.js'
+);
 $configFile = __TYPECHO_ROOT_DIR__ . __TYPECHO_PLUGIN_DIR__ . '/VisitorLoggerPro/ip_filters.json';
 
 // 如果管理员尝试删除当前IP数据
@@ -89,72 +95,20 @@ if ($isAdministrator) {
 $this->need('header.php');
 ?>
 
-<!-- 智能加载ECharts：优先CDN，失败时自动回退到本地 -->
+<script src="<?php echo htmlspecialchars($pluginAssetUrl . '/js/resource-loader.js', ENT_QUOTES, 'UTF-8'); ?>"></script>
 <script>
-// 添加超时机制的脚本加载函数
-function loadScriptWithTimeout(src, timeout = 2000) {
-    return new Promise((resolve, reject) => {
-        const timer = setTimeout(() => {
-            reject(new Error('Timeout'));
-        }, timeout);
-
-        const script = document.createElement('script');
-        script.src = src;
-        script.onload = () => {
-            clearTimeout(timer);
-            resolve();
-        };
-        script.onerror = () => {
-            clearTimeout(timer);
-            reject(new Error('Failed to load'));
-        };
-        document.head.appendChild(script);
-    });
-}
-
-// 优化后的ECharts加载函数
-function loadEChartsWithFallback() {
-    return new Promise((resolve, reject) => {
-        // 优先尝试CDN，2秒超时
-        loadScriptWithTimeout('https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js', 2000)
-        .then(() => {
-            console.log('✅ ECharts CDN加载成功');
-            resolve('cdn');
-        })
-        .catch(() => {
-            console.warn('⚠️ ECharts CDN加载超时或失败，立即尝试本地文件');
-            // CDN失败，立即加载本地文件
-            const localScript = document.createElement('script');
-            localScript.src = <?php echo json_encode($pluginAssetUrl . '/js/echarts.min.js'); ?>;
-        localScript.onload = () => {
-            console.log('✅ ECharts 本地文件加载成功');
-            resolve('local');
-        };
-        localScript.onerror = () => {
-            console.error('❌ ECharts 本地文件加载失败');
-            reject('both_failed');
-        };
-        document.head.appendChild(localScript);
-        });
-    });
-}
-
-// 立即开始加载
-loadEChartsWithFallback().then(result => {
-    console.log('📊 ECharts加载完成:', result);
-    // 设置全局标记，表示ECharts已准备就绪
+const visitorLoggerProResources = <?php echo json_encode($resourceConfig, JSON_UNESCAPED_SLASHES); ?>;
+VisitorLoggerProLoader.loadECharts(visitorLoggerProResources).then(() => {
     window.echartsReady = true;
-    // 触发应用初始化（如果需要）
     if (typeof window.startTrendInitialization === 'function') {
         window.startTrendInitialization();
     }
 }).catch(error => {
-    console.error('❌ ECharts加载完全失败:', error);
+    console.error('ECharts 加载失败:', error);
     window.echartsReady = false;
-    // 可选：显示错误提示
     const errorDiv = document.createElement('div');
     errorDiv.innerHTML = '<div style="color: red; padding: 10px; background: #ffebee; border: 1px solid #ff8a8a;">ECharts加载失败，请检查网络或联系管理员</div>';
-document.body.appendChild(errorDiv);
+    document.body.appendChild(errorDiv);
 });
 </script>
 

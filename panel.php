@@ -1,6 +1,11 @@
 <?php
 if (!defined('__TYPECHO_ROOT_DIR__')) exit;
 
+if (isset($_GET['view']) && $_GET['view'] === 'trend') {
+    require dirname(__FILE__) . '/trend.php';
+    return;
+}
+
 // 引入 Typecho 后台模板
 if (!defined('__TYPECHO_ADMIN__')) {
     include 'common.php';
@@ -9,7 +14,7 @@ $options = Helper::options();
 $security = Typecho_Widget::widget('Widget_Security');
 $currentUser = Typecho_Widget::widget('Widget_User');
 $panelUrl = Typecho_Common::url('extending.php?panel=VisitorLoggerPro%2Fpanel.php', $options->adminUrl);
-$trendPanelUrl = Typecho_Common::url('extending.php?panel=VisitorLoggerPro%2Ftrend.php', $options->adminUrl);
+$trendPanelUrl = Typecho_Common::url('extending.php?panel=VisitorLoggerPro%2Fpanel.php&view=trend', $options->adminUrl);
 
 if (isset($_POST['clean_up']) || isset($_POST['delete_searched_ip'])) {
     if (!$currentUser->hasLogin() || !$currentUser->pass('administrator', true)) {
@@ -49,6 +54,16 @@ if (!preg_match('/^#[0-9a-fA-F]{3,8}$/', $backgroundColour)) {
 }
 $aggregateApiUrl = $security->getIndex('/action/visitor-stats-api?do=aggregate');
 $pluginAssetUrl = rtrim($options->pluginUrl, '/') . '/VisitorLoggerPro';
+$pluginOptions = Helper::options()->plugin('VisitorLoggerPro');
+$resourceConfig = array(
+    'echartsSource' => isset($pluginOptions->echartsSource) && $pluginOptions->echartsSource === 'local' ? 'local' : 'cdn',
+    'echartsCdn' => 'https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js',
+    'echartsLocal' => $pluginAssetUrl . '/js/echarts.min.js',
+    'flatpickrCdn' => 'https://cdn.jsdelivr.net/npm/flatpickr',
+    'flatpickrLocal' => $pluginAssetUrl . '/js/flatpickr.js',
+    'flatpickrCssCdn' => 'https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css',
+    'flatpickrCssLocal' => $pluginAssetUrl . '/css/flatpickr.min.css'
+);
 
 
 $page = isset($_GET['page']) ? intval($_GET['page']) : 1;
@@ -78,96 +93,13 @@ $routeStats = $db->fetchAll(
 );
 ?>
 
+<script src="<?php echo htmlspecialchars($pluginAssetUrl . '/js/resource-loader.js', ENT_QUOTES, 'UTF-8'); ?>"></script>
 <script>
-// 为每个资源添加超时加载机制
-function loadScriptWithTimeout(src, timeout = 2000) {
-    return new Promise((resolve, reject) => {
-        const timer = setTimeout(() => {
-            reject(new Error('Timeout'));
-        }, timeout);
-
-        const script = document.createElement('script');
-        script.src = src;
-        script.onload = () => {
-            clearTimeout(timer);
-            resolve();
-        };
-        script.onerror = () => {
-            clearTimeout(timer);
-            reject(new Error('Failed to load'));
-        };
-        document.head.appendChild(script);
-    });
-}
-
-// 加载ECharts的智能回退机制
-function loadECharts() {
-    return new Promise((resolve, reject) => {
-        // 首先尝试CDN，2秒超时
-        loadScriptWithTimeout('https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js', 2000)
-        .then(() => {
-            console.log('✅ ECharts CDN加载成功');
-            resolve('cdn');
-        })
-        .catch(() => {
-            console.warn('⚠️ ECharts CDN加载失败，尝试本地文件');
-            // CDN失败，立即尝试本地文件
-            const localScript = document.createElement('script');
-            localScript.src = <?php echo json_encode($pluginAssetUrl . '/js/echarts.min.js'); ?>;
-        localScript.onload = () => {
-            console.log('✅ ECharts 本地文件加载成功');
-            resolve('local');
-        };
-        localScript.onerror = () => {
-            console.error('❌ ECharts 本地文件也加载失败');
-            reject('both_failed');
-        };
-        document.head.appendChild(localScript);
-        });
-    });
-}
-
-// 加载Flatpickr的智能回退机制
-function loadFlatpickr() {
-    return new Promise((resolve, reject) => {
-        // 首先尝试CDN，2秒超时
-        loadScriptWithTimeout('https://cdn.jsdelivr.net/npm/flatpickr', 2000)
-        .then(() => {
-            console.log('✅ Flatpickr CDN加载成功');
-            // 加载CDN的CSS
-            const link = document.createElement('link');
-            link.rel = 'stylesheet';
-        link.href = 'https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css';
-        document.head.appendChild(link);
-        resolve('cdn');
-        })
-        .catch(() => {
-            console.warn('⚠️ Flatpickr CDN加载失败，尝试本地文件');
-            // CDN失败，立即尝试本地文件
-            const localScript = document.createElement('script');
-            localScript.src = <?php echo json_encode($pluginAssetUrl . '/js/flatpickr.js'); ?>;
-        localScript.onload = () => {
-            console.log('✅ Flatpickr 本地文件加载成功');
-            // 加载本地CSS
-            const cssLink = document.createElement('link');
-            cssLink.rel = 'stylesheet';
-        cssLink.href = <?php echo json_encode($pluginAssetUrl . '/css/flatpickr.min.css'); ?>;
-        document.head.appendChild(cssLink);
-        resolve('local');
-        };
-        localScript.onerror = () => {
-            console.error('❌ Flatpickr 本地文件也加载失败');
-            reject('both_failed');
-        };
-        document.head.appendChild(localScript);
-        });
-    });
-}
-
-// 并行加载所有资源
-Promise.allSettled([loadECharts(), loadFlatpickr()]).then(results => {
-    console.log('📊 资源加载结果:', results);
-    // 确保DOM加载完成
+const visitorLoggerProResources = <?php echo json_encode($resourceConfig, JSON_UNESCAPED_SLASHES); ?>;
+Promise.allSettled([
+    VisitorLoggerProLoader.loadECharts(visitorLoggerProResources),
+    VisitorLoggerProLoader.loadFlatpickr(visitorLoggerProResources)
+]).then(() => {
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', initializeApp);
     } else {
@@ -768,9 +700,12 @@ function initializeApp() {
     }
 
     #vlp-admin .body.container {
+        display: block;
+        width: 100%;
         max-width: 100%;
         margin: 0 auto;
         padding: 0 20px;
+        box-sizing: border-box;
     }
 
     .page-header {

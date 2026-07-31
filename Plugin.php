@@ -9,7 +9,7 @@ if (!defined('__TYPECHO_ROOT_DIR__')) {
  * 
  * @package VisitorLoggerPro
  * @author GTX690战术核显卡导弹
- * @version 2.3.0
+ * @version 2.3.1
  * @link https://www.nekopara.uk
  */
 
@@ -52,8 +52,10 @@ class VisitorLoggerPro_Plugin implements Typecho_Plugin_Interface
         Typecho_Plugin::factory('Widget_Archive')->handle = array('VisitorLoggerPro_Plugin', 'handleTemplate');
         Typecho_Plugin::factory('Widget_Archive')->header = array('VisitorLoggerPro_Plugin', 'logVisitorInfo');
 
+        // 趋势分析是访客日志面板的内部视图，不单独占用后台菜单入口。
+        Helper::removePanel(1, 'VisitorLoggerPro/trend.php');
+        Helper::removePanel(2, 'VisitorLoggerPro/trend.php');
         Helper::addPanel(1, 'VisitorLoggerPro/panel.php', '访客日志', '查看访客日志', 'administrator');
-        Helper::addPanel(1, 'VisitorLoggerPro/trend.php', '趋势分析', '访客趋势分析', 'administrator');
 
         return '插件已激活，访客日志功能已启用。';
     }
@@ -137,6 +139,18 @@ class VisitorLoggerPro_Plugin implements Typecho_Plugin_Interface
             _t('是否启用访客统计功能')
         );
         $form->addInput($enableStats);
+
+        $echartsSource = new Typecho_Widget_Helper_Form_Element_Radio(
+            'echartsSource',
+            array(
+                'cdn' => _t('公共 CDN（失败时回落本地）'),
+                'local' => _t('直接使用本地资源')
+            ),
+            'cdn',
+            _t('ECharts 加载方式'),
+            _t('网络访问公共 CDN 不稳定时可选择直接使用插件内置资源。')
+        );
+        $form->addInput($echartsSource);
 
         $trustProxy = new Typecho_Widget_Helper_Form_Element_Radio(
             'trustProxy',
