@@ -5,14 +5,50 @@ if (!defined('__TYPECHO_ROOT_DIR__')) exit;
 if (!defined('__TYPECHO_ADMIN__')) {
     include 'common.php';
 }
+$options = Helper::options();
+$security = Typecho_Widget::widget('Widget_Security');
+$currentUser = Typecho_Widget::widget('Widget_User');
+$panelUrl = Typecho_Common::url('extending.php?panel=VisitorLoggerPro%2Fpanel.php', $options->adminUrl);
+$trendPanelUrl = Typecho_Common::url('extending.php?panel=VisitorLoggerPro%2Ftrend.php', $options->adminUrl);
+
+if (isset($_POST['clean_up']) || isset($_POST['delete_searched_ip'])) {
+    if (!$currentUser->hasLogin() || !$currentUser->pass('administrator', true)) {
+        throw new Typecho_Widget_Exception(_t('禁止访问'), 403);
+    }
+    $security->protect();
+    if (isset($_POST['clean_up'])) {
+        $days = max(0, (int) ($_POST['days'] ?? 0));
+        $message = $days > 0 ? VisitorLoggerPro_Plugin::cleanUpRecordsByDays($days) : '请输入有效天数';
+    } else {
+        $ipToDelete = trim((string) ($_POST['ip_to_delete'] ?? ''));
+        if ($ipToDelete === '') {
+            $message = '请输入要删除的 IP';
+        } else {
+            $db = Typecho_Db::get();
+            $deleted = $db->query($db->delete('table.visitor_log')->where('ip LIKE ?', '%' . $ipToDelete . '%'));
+            $message = '已删除 ' . (int) $deleted . ' 条匹配记录';
+        }
+    }
+    Typecho_Widget::widget('Widget_Notice')->set(_t($message), null, 'success');
+    header('Location: ' . $panelUrl);
+    exit;
+}
 include 'header.php';
 include 'menu.php';
 
 // 获取配置的背景URL（带默认值）
 $backgroundUrl = Helper::options()->plugin('VisitorLoggerPro')->backgroundUrl ?: 'https://pic.nekopara.uk/?format=webp';
+if (!filter_var($backgroundUrl, FILTER_VALIDATE_URL) || !in_array(parse_url($backgroundUrl, PHP_URL_SCHEME), array('http', 'https'), true)) {
+    $backgroundUrl = '';
+}
 
 // 获取配置的卡片背景色（带默认值）
 $backgroundColour = Helper::options()->plugin('VisitorLoggerPro')->backgroundColour ?: '#ffffffc4';
+if (!preg_match('/^#[0-9a-fA-F]{3,8}$/', $backgroundColour)) {
+    $backgroundColour = '#ffffffc4';
+}
+$aggregateApiUrl = $security->getIndex('/action/visitor-stats-api?do=aggregate');
+$pluginAssetUrl = rtrim($options->pluginUrl, '/') . '/VisitorLoggerPro';
 
 
 $page = isset($_GET['page']) ? intval($_GET['page']) : 1;
@@ -30,42 +66,16 @@ $logs = VisitorLoggerPro_Plugin::getSearchVisitorLogs($page, $pageSize, $ip);
 $startDate = isset($_POST['startDate']) ? $_POST['startDate'] : date('Y-m-d 00:00:00', strtotime('-6 days'));
 $endDate = isset($_POST['endDate']) ? $_POST['endDate'] : date('Y-m-d 23:59:59');
 
-// 获取所有记录用于统计
-$allLogsForStats = $db->fetchAll($db->select('country, route')
-    ->from($prefix . 'visitor_log')
-    ->where('ip LIKE ?', '%' . $ip . '%'));
-
-// 在PHP中进行统计
-$countryStats = [];
-$routeStats = [];
-
-foreach ($allLogsForStats as $log) {
-    // 统计国家访问
-    $country = $log['country'];
-    if (!isset($countryStats[$country])) {
-        $countryStats[$country] = ['country' => $country, 'count' => 0];
-    }
-    $countryStats[$country]['count']++;
-
-    // 统计路由访问
-    $route = $log['route'];
-    if (!isset($routeStats[$route])) {
-        $routeStats[$route] = ['route' => $route, 'count' => 0];
-    }
-    $routeStats[$route]['count']++;
-}
-
-// 按count降序排序
-uasort($countryStats, function ($a, $b) {
-    return $b['count'] - $a['count'];
-});
-
-uasort($routeStats, function ($a, $b) {
-    return $b['count'] - $a['count'];
-});
-
-$countryStats = array_values($countryStats);
-$routeStats = array_values($routeStats);
+$countryStats = $db->fetchAll(
+    $db->select('country', array('COUNT(id)' => 'count'))->from($prefix . 'visitor_log')
+        ->where('ip LIKE ?', '%' . $ip . '%')->group('country')
+        ->order('count', Typecho_Db::SORT_DESC)->limit(30)
+);
+$routeStats = $db->fetchAll(
+    $db->select('route', array('COUNT(id)' => 'count'))->from($prefix . 'visitor_log')
+        ->where('ip LIKE ?', '%' . $ip . '%')->group('route')
+        ->order('count', Typecho_Db::SORT_DESC)->limit(30)
+);
 ?>
 
 <script>
@@ -103,7 +113,7 @@ function loadECharts() {
             console.warn('⚠️ ECharts CDN加载失败，尝试本地文件');
             // CDN失败，立即尝试本地文件
             const localScript = document.createElement('script');
-            localScript.src = '../usr/plugins/VisitorLoggerPro/js/echarts.min.js';
+            localScript.src = <?php echo json_encode($pluginAssetUrl . '/js/echarts.min.js'); ?>;
         localScript.onload = () => {
             console.log('✅ ECharts 本地文件加载成功');
             resolve('local');
@@ -135,13 +145,13 @@ function loadFlatpickr() {
             console.warn('⚠️ Flatpickr CDN加载失败，尝试本地文件');
             // CDN失败，立即尝试本地文件
             const localScript = document.createElement('script');
-            localScript.src = '../usr/plugins/VisitorLoggerPro/js/flatpickr.js';
+            localScript.src = <?php echo json_encode($pluginAssetUrl . '/js/flatpickr.js'); ?>;
         localScript.onload = () => {
             console.log('✅ Flatpickr 本地文件加载成功');
             // 加载本地CSS
             const cssLink = document.createElement('link');
             cssLink.rel = 'stylesheet';
-        cssLink.href = '../usr/plugins/VisitorLoggerPro/css/flatpickr.min.css';
+        cssLink.href = <?php echo json_encode($pluginAssetUrl . '/css/flatpickr.min.css'); ?>;
         document.head.appendChild(cssLink);
         resolve('local');
         };
@@ -282,7 +292,7 @@ function initializeApp() {
                                     endDate
                                 });
 
-                                fetch('../usr/plugins/VisitorLoggerPro/getVisitStatistic.php', {
+                fetch(<?php echo json_encode($aggregateApiUrl, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>, {
                                         method: 'POST',
                                         headers: {
                                             'Content-Type': 'application/json'
@@ -693,7 +703,7 @@ function initializeApp() {
             try {
                 const currentPage = <?php echo $page; ?>;
                 const totalPages = <?php echo $totalPages; ?>;
-                const ipQuery = '<?php echo $ip; ?>';
+                const ipQuery = <?php echo json_encode($ip, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
 
                 debugLog('分页信息', {
                     current: currentPage,
@@ -747,17 +757,17 @@ function initializeApp() {
 </script>
 
 <style>
-    .main {
+    #vlp-admin {
         padding: 20px;
         min-height: 100vh;
-        background-image: url('<?php echo $backgroundUrl; ?>');
+        background-image: url(<?php echo json_encode($backgroundUrl, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>);
         background-repeat: no-repeat;
         background-position: center center;
         background-attachment: fixed;
         background-size: cover;
     }
 
-    .body.container {
+    #vlp-admin .body.container {
         max-width: 100%;
         margin: 0 auto;
         padding: 0 20px;
@@ -850,12 +860,15 @@ function initializeApp() {
         grid-template-columns: minmax(900px, 2fr) minmax(300px, 1fr);
         gap: 24px;
         align-items: start;
+        min-width: 0;
+        width: 100%;
     }
 
     .left-section {
         display: flex;
         flex-direction: column;
         gap: 24px;
+        min-width: 0;
     }
 
     .action-forms {
@@ -1021,6 +1034,8 @@ function initializeApp() {
         flex-direction: column;
         gap: 24px;
         border: 1px solid #e2e8f0;
+        min-width: 0;
+        max-width: 100%;
     }
 
     .chart-container {
@@ -1034,6 +1049,9 @@ function initializeApp() {
         box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
         transition: all 0.3s ease;
         overflow: hidden;
+        min-width: 0;
+        max-width: 100%;
+        box-sizing: border-box;
     }
 
     .chart-container::before {
@@ -1187,15 +1205,74 @@ function initializeApp() {
             min-height: 250px;
         }
     }
+
+    @media (max-width: 768px) {
+        #vlp-admin {
+            padding: 8px;
+        }
+
+        #vlp-admin .body.container {
+            width: 100%;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        .page-header {
+            align-items: flex-start;
+            flex-direction: column;
+            gap: 12px;
+            padding: 14px;
+        }
+
+        .nav-links {
+            width: 100%;
+        }
+
+        .nav-link {
+            flex: 1;
+            padding: 8px;
+            text-align: center;
+        }
+
+        .content-wrapper {
+            display: block;
+        }
+
+        .action-forms {
+            grid-template-columns: 1fr;
+            gap: 12px;
+        }
+
+        .action-form,
+        .logs-section,
+        .stats-section {
+            padding: 12px;
+            box-sizing: border-box;
+        }
+
+        .logs-section {
+            max-width: 100%;
+            overflow-x: auto;
+        }
+
+        .logs-section .typecho-list-table {
+            min-width: 720px;
+        }
+
+        .stats-section {
+            margin-top: 16px;
+            gap: 16px;
+        }
+    }
 </style>
 
-<div class="main">
+<main class="main" id="vlp-admin">
     <div class="body container">
         <div class="page-header">
             <h2>访客日志</h2>
             <div class="nav-links">
-                <a href="?panel=VisitorLoggerPro%2Fpanel.php" class="nav-link active">访客日志</a>
-                <a href="?panel=VisitorLoggerPro%2Ftrend.php" class="nav-link">趋势分析</a>
+                <a href="<?php echo htmlspecialchars($panelUrl, ENT_QUOTES, 'UTF-8'); ?>" class="nav-link active">访客日志</a>
+                <a href="<?php echo htmlspecialchars($trendPanelUrl, ENT_QUOTES, 'UTF-8'); ?>" class="nav-link">趋势分析</a>
             </div>
         </div>
 
@@ -1204,13 +1281,14 @@ function initializeApp() {
         <div class="content-wrapper">
             <div class="left-section">
                 <div class="action-forms">
-                    <form class="action-form" method="post" action="?panel=VisitorLoggerPro%2Fpanel.php&page=<?php echo $page; ?>">
+                    <form class="action-form" method="post" action="<?php echo htmlspecialchars($panelUrl, ENT_QUOTES, 'UTF-8'); ?>">
+                        <input type="hidden" name="_" value="<?php echo htmlspecialchars($security->getToken($request->getRequestUrl()), ENT_QUOTES, 'UTF-8'); ?>">
                         <label for="days">删除最早的几天记录</label>
                         <input type="number" id="days" name="days" min="0" value="3">
                         <button type="submit" name="clean_up" onclick="return confirm('此操作将删除从最早记录开始计算的指定天数内的所有记录！确定要继续吗？')">删除</button>
                     </form>
 
-                    <form class="action-form" method="post" action="?panel=VisitorLoggerPro%2Fpanel.php&page=<?php echo $page; ?>">
+                    <form class="action-form" method="post" action="<?php echo htmlspecialchars($panelUrl, ENT_QUOTES, 'UTF-8'); ?>">
                         <label for="ipQuery">IP地址查询</label>
                         <input type="text" id="ipQuery" name="ipQuery" value="<?php echo htmlspecialchars($ip); ?>" placeholder="支持模糊查询">
                         <button type="submit" name="searchLogs">查询</button>
@@ -1230,7 +1308,8 @@ function initializeApp() {
 
                 <?php if (!empty($ip)): ?>
                     <div class="action-forms" style="margin-top: -12px; margin-bottom: 12px;">
-                        <form class="action-form" method="post" action="?panel=VisitorLoggerPro/panel.php" onsubmit="return confirm('警告：此操作将删除所有与查询IP" <?php echo htmlspecialchars($ip); ?>"匹配的日志，且不可恢复。您确定要继续吗？');">
+                        <form class="action-form" method="post" action="<?php echo htmlspecialchars($panelUrl, ENT_QUOTES, 'UTF-8'); ?>" onsubmit="return confirm('确定删除所有匹配该 IP 的日志吗？');">
+                            <input type="hidden" name="_" value="<?php echo htmlspecialchars($security->getToken($request->getRequestUrl()), ENT_QUOTES, 'UTF-8'); ?>">
                             <label for="deleteIp">删除IP日志</label>
                             <input type="hidden" name="ip_to_delete" value="<?php echo htmlspecialchars($ip); ?>">
                             <button type="submit" name="delete_searched_ip" style="background-color: #d9534f; color:white;">删除 "<?php echo htmlspecialchars($ip); ?>" 的所有记录</button>
@@ -1259,7 +1338,7 @@ function initializeApp() {
                                     <tr>
                                         <td><?php echo htmlspecialchars($log['ip']); ?></td>
                                         <td><?php echo htmlspecialchars(urldecode($log['route'])); ?></td>
-                                        <td><?php echo htmlspecialchars($log['country']); ?></td>
+                                        <td><?php echo htmlspecialchars(implode(' / ', array_filter(array($log['country'], $log['region'], $log['city']), function ($value) { return $value && $value !== 'Unknown'; }))); ?></td>
                                         <td title="<?php echo htmlspecialchars($log['user_agent'] ?? ''); ?>"><?php
                                                                                                                 $userAgent = $log['user_agent'] ?? '';
                                                                                                                 if (strlen($userAgent) > 50) {
@@ -1325,31 +1404,8 @@ function initializeApp() {
             </div>
         </div>
     </div>
-</div>
+</main>
 
 <?php
 include 'footer.php';
-
-if (isset($_POST['clean_up'])) {
-    $days = intval($_POST['days']);
-    if ($days > 0) {
-        $result = VisitorLoggerPro_Plugin::cleanUpRecordsByDays($days);
-        echo "<script>alert('" . $result . "'); window.location.href = '?panel=VisitorLoggerPro/panel.php';</script>";
-    } else {
-        echo "<script>alert('请输入有效天数');</script>";
-    }
-    exit;
-}
-
-if (isset($_POST['delete_searched_ip'])) {
-    $ipToDelete = $_POST['ip_to_delete'];
-    if (!empty($ipToDelete)) {
-        $db = Typecho_Db::get();
-        $prefix = $db->getPrefix();
-        $db->query($db->delete($prefix . 'visitor_log')->where('ip LIKE ?', '%' . $ipToDelete . '%'));
-
-        echo "<script>alert('已成功删除IP" . htmlspecialchars($ipToDelete) . "的所有匹配记录。'); window.location.href = '?panel=VisitorLoggerPro/panel.php';</script>";
-        exit;
-    }
-}
 ?>

@@ -9,12 +9,15 @@ if (!defined('__TYPECHO_ROOT_DIR__')) {
  * 
  * @package VisitorLoggerPro
  * @author GTX690战术核显卡导弹
- * @version 2.2.8
+ * @version 2.3.0
  * @link https://www.nekopara.uk
  */
 
 // 加载兼容适配器
 require_once dirname(__FILE__) . '/adapter.php';
+require_once dirname(__FILE__) . '/Database.php';
+require_once dirname(__FILE__) . '/Statistics.php';
+require_once dirname(__FILE__) . '/Location.php';
 
 require_once dirname(__FILE__) . '/ipdata/src/IpLocation.php';
 require_once dirname(__FILE__) . '/ipdata/src/ipdbv6.func.php';
@@ -36,92 +39,21 @@ class VisitorLoggerPro_Plugin implements Typecho_Plugin_Interface
      */
     public static function activate()
     {
-        $db = Typecho_Db::get();
-        $prefix = $db->getPrefix();
-
-        // 升级: 检查 time 列是否为 TIMESTAMP 类型，如果是，则修改为 DATETIME
-        // 并将现有数据从 UTC 转换为服务器设置的本地时间
         try {
-            $col = $db->fetchRow($db->query("SHOW COLUMNS FROM `{$prefix}visitor_log` WHERE Field = 'time'"));
-            if ($col && strpos(strtolower($col['Type']), 'timestamp') !== false) {
-                $db->query("ALTER TABLE `{$prefix}visitor_log` MODIFY COLUMN `time` DATETIME NULL DEFAULT NULL");
-
-                // convert existing timestamp data
-                // get timezone offset from typecho settings
-                $options = Helper::options();
-                $timezone = $options->timezone;
-                $offset = 0;
-                if (!empty($timezone)) {
-                    $tz = new DateTimeZone($timezone);
-                    $datetime = new DateTime('now', $tz);
-                    $offset = $tz->getOffset($datetime);
-                }
-
-                if ($offset != 0) {
-                    // TIMESTAMP is stored as UTC. ALTER TABLE converts it to DATETIME in session timezone (likely UTC).
-                    // So we add the blog's timezone offset.
-                    $db->query("UPDATE `{$prefix}visitor_log` SET `time` = DATE_ADD(`time`, INTERVAL {$offset} SECOND) WHERE `time` IS NOT NULL");
-                }
-            }
+            VisitorLoggerPro_Database::install();
         } catch (Exception $e) {
-            // If it fails, it might be a database that doesn't support this syntax (like SQLite), or the table doesn't exist yet (new install).
-            // Ignore the error and continue with the table creation logic below.
-        }
-
-        $sql = "CREATE TABLE IF NOT EXISTS `{$prefix}visitor_log` (
-            `id` INT(10) UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-            `ip` VARCHAR(45) NOT NULL,
-            `route` VARCHAR(255) NOT NULL,
-            `country` VARCHAR(100),
-            `region` VARCHAR(100),
-            `city` VARCHAR(100),
-            `user_agent` TEXT,
-            `time` DATETIME DEFAULT NULL
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8;";
-        // ********如果提示UNSIGNED 或 AUTO_INCREMENT 或 ENGINE的相关错误，将上述代码替换成以下代码********
-        //$sql = "CREATE TABLE IF NOT EXISTS `{$prefix}visitor_log` (
-        //    `id` INT(10) PRIMARY KEY,
-        //    `ip` VARCHAR(45) NOT NULL,
-        //    `route` VARCHAR(255) NOT NULL,
-        //    `country` VARCHAR(100),
-        //    `region` VARCHAR(100),
-        //    `city` VARCHAR(100),
-        //    `time` DATETIME DEFAULT NULL
-        //);";
-
-        try {
-            $db->query($sql);
-
-            // 检查是否需要添加user_agent字段（用于升级现有安装）
-            try {
-                $columns = $db->fetchAll("SHOW COLUMNS FROM `{$prefix}visitor_log`");
-                $hasUserAgent = false;
-                foreach ($columns as $column) {
-                    if ($column['Field'] === 'user_agent') {
-                        $hasUserAgent = true;
-                        break;
-                    }
-                }
-
-                if (!$hasUserAgent) {
-                    $db->query("ALTER TABLE `{$prefix}visitor_log` ADD COLUMN `user_agent` TEXT AFTER `city`");
-                }
-            } catch (Exception $e) {
-                // 如果添加字段失败，继续运行（可能是权限问题或数据库不支持）
-            }
-        } catch (Exception $e) {
-            throw new Typecho_Plugin_Exception('创建访客日志表或IP地址记录表失败: ' . $e->getMessage());
+            throw new Typecho_Plugin_Exception('创建或升级访客日志表失败: ' . $e->getMessage());
         }
 
         // 注册访客统计API
-        Helper::addAction('visitor-stats-api', 'VisitorLogger_Action');
+        Helper::addAction('visitor-stats-api', 'VisitorLoggerPro_Action');
 
         // 注册统计模板和钩子
         Typecho_Plugin::factory('Widget_Archive')->handle = array('VisitorLoggerPro_Plugin', 'handleTemplate');
         Typecho_Plugin::factory('Widget_Archive')->header = array('VisitorLoggerPro_Plugin', 'logVisitorInfo');
 
         Helper::addPanel(1, 'VisitorLoggerPro/panel.php', '访客日志', '查看访客日志', 'administrator');
-        Helper::addPanel(2, 'VisitorLoggerPro/trend.php', '趋势分析', '访客趋势分析', 'administrator');
+        Helper::addPanel(1, 'VisitorLoggerPro/trend.php', '趋势分析', '访客趋势分析', 'administrator');
 
         return '插件已激活，访客日志功能已启用。';
     }
@@ -137,6 +69,8 @@ class VisitorLoggerPro_Plugin implements Typecho_Plugin_Interface
     public static function deactivate()
     {
         Helper::removePanel(1, 'VisitorLoggerPro/panel.php');
+        Helper::removePanel(1, 'VisitorLoggerPro/trend.php');
+        // 清理由旧版本注册到“撰写”菜单下的面板。
         Helper::removePanel(2, 'VisitorLoggerPro/trend.php');
         Helper::removeAction('visitor-stats-api');
         return '插件已禁用，访客日志功能已停用。';
@@ -185,7 +119,7 @@ class VisitorLoggerPro_Plugin implements Typecho_Plugin_Interface
         $ipv4db = new Typecho_Widget_Helper_Form_Element_Radio(
             'ipv4db',
             array('ip2region' => _t('ip2region数据库'), 'cz88' => _t('纯真数据库')),
-            'cz88',
+            'ip2region',
             'IPV4数据库选项',
             _t('<strong>纯真数据库(cz88):</strong> 更新勤快，数据详尽，但可能包含一些非标准信息（如"网吧"），插件已做过滤处理。<br><strong>ip2region数据库:</strong> 查询速度快，格式标准统一，准确性高。推荐使用。')
         );
@@ -203,6 +137,33 @@ class VisitorLoggerPro_Plugin implements Typecho_Plugin_Interface
             _t('是否启用访客统计功能')
         );
         $form->addInput($enableStats);
+
+        $trustProxy = new Typecho_Widget_Helper_Form_Element_Radio(
+            'trustProxy',
+            array('1' => _t('信任'), '0' => _t('不信任')),
+            '0',
+            _t('信任反向代理 IP 请求头'),
+            _t('仅当站点位于可信反向代理或 CDN 后方时启用。启用后读取 X-Forwarded-For 的首个有效地址。')
+        );
+        $form->addInput($trustProxy);
+
+        $autoCleanup = new Typecho_Widget_Helper_Form_Element_Radio(
+            'autoCleanup',
+            array('1' => _t('启用'), '0' => _t('关闭')),
+            '1',
+            _t('自动清理历史访问数据'),
+            _t('每天最多执行一次，删除超过保留天数的数据。')
+        );
+        $form->addInput($autoCleanup);
+
+        $retentionDays = new Typecho_Widget_Helper_Form_Element_Text(
+            'retentionDays',
+            null,
+            '90',
+            _t('数据保留天数'),
+            _t('默认 90 天，可设置 1 到 3650 天。关闭自动清理后此项不生效。')
+        );
+        $form->addInput($retentionDays);
 
         /* 插件背景设置 */
         $backgroundUrl = new Typecho_Widget_Helper_Form_Element_Text(
@@ -245,8 +206,10 @@ class VisitorLoggerPro_Plugin implements Typecho_Plugin_Interface
         $bots = array();
         $_bots = explode("|", str_replace(array("\r\n", "\r", "\n"), "|", Helper::options()->plugin('VisitorLoggerPro')->botList));
         foreach ($_bots as $_bot) {
-            $_bot = explode("=>", $_bot);
-            $bots[strval($_bot[0])] = $_bot[1];
+            $_bot = array_map('trim', explode("=>", $_bot, 2));
+            if (count($_bot) === 2 && $_bot[0] !== '') {
+                $bots[strval($_bot[0])] = $_bot[1];
+            }
         }
         return $bots;
     }
@@ -283,6 +246,13 @@ class VisitorLoggerPro_Plugin implements Typecho_Plugin_Interface
      */
     public static function isIgnoredIP($ip)
     {
+        $filterFile = __DIR__ . '/ip_filters.json';
+        if (is_file($filterFile)) {
+            $filtered = json_decode((string) file_get_contents($filterFile), true);
+            if (is_array($filtered) && in_array($ip, $filtered, true)) {
+                return true;
+            }
+        }
         $options = Helper::options();
         if (!isset($options->plugin('VisitorLoggerPro')->ignoreIPs)) {
             return false;
@@ -352,22 +322,25 @@ class VisitorLoggerPro_Plugin implements Typecho_Plugin_Interface
 
     public static function logVisitorInfo()
     {
+        $pluginOptions = Helper::options()->plugin('VisitorLoggerPro');
+        if (isset($pluginOptions->enableStats) && (string) $pluginOptions->enableStats !== '1') {
+            return;
+        }
         if (self::isBot()) {
             return;
         }
-        $route = explode('?', $_SERVER['REQUEST_URI'])[0];
-        if (strpos($route, "admin") !== false) {
+        if (isset($_COOKIE['visitorStats_selfExcluded']) && $_COOKIE['visitorStats_selfExcluded'] === 'true') {
+            return;
+        }
+        $route = parse_url((string) ($_SERVER['REQUEST_URI'] ?? '/'), PHP_URL_PATH) ?: '/';
+        $adminDir = defined('__TYPECHO_ADMIN_DIR__') ? trim(__TYPECHO_ADMIN_DIR__, '/') : 'admin';
+        if (preg_match('#/(?:' . preg_quote($adminDir, '#') . ')(?:/|$)#', $route)) {
             return;
         }
         $db = Typecho_Db::get();
-        $prefix = $db->getPrefix();
-        $ip_string = self::getIpAddress();
-        if (strpos($ip_string, ',') !== false) {
-            $ip_string = str_replace(' ', '', $ip_string);
-            $parts = explode(',', $ip_string);
-            $ip = $parts[0];
-        } else {
-            $ip = $ip_string;
+        $ip = self::getIpAddress();
+        if ($ip === null) {
+            return;
         }
 
         // 检查IP是否在忽略列表中
@@ -376,6 +349,7 @@ class VisitorLoggerPro_Plugin implements Typecho_Plugin_Interface
         }
 
         $location = self::getIpLocation($ip);
+        $userAgent = substr((string) ($_SERVER['HTTP_USER_AGENT'] ?? ''), 0, 512);
 
         $db->query($db->insert('table.visitor_log')->rows(array(
             'ip' => $ip,
@@ -383,9 +357,16 @@ class VisitorLoggerPro_Plugin implements Typecho_Plugin_Interface
             'country' => $location['country'] ?? 'Unknown',
             'region' => $location['region'] ?? 'Unknown',
             'city' => $location['city'] ?? 'Unknown',
-            'user_agent' => $_SERVER['HTTP_USER_AGENT'] ?? '',
-            'time' => date('Y-m-d H:i:s')
+            'visitor_hash' => VisitorLoggerPro_Database::visitorHash($ip, $userAgent),
+            'user_agent' => $userAgent,
+            'time' => VisitorLoggerPro_Database::siteDate()
         )));
+
+        try {
+            VisitorLoggerPro_Database::maybeCleanup();
+        } catch (Exception $e) {
+            error_log('VisitorLoggerPro cleanup error: ' . $e->getMessage());
+        }
     }
 
     public static function getVisitorLogs($page = 1, $pageSize = 10)
@@ -422,76 +403,80 @@ class VisitorLoggerPro_Plugin implements Typecho_Plugin_Interface
     }
 
 
-    private static function getIpAddress()
+    public static function getIpAddress()
     {
-        if (!empty($_SERVER['HTTP_CLIENT_IP'])) {
-            return $_SERVER['HTTP_CLIENT_IP'];
-        } elseif (!empty($_SERVER['HTTP_X_FORWARDED_FOR'])) {
-            return $_SERVER['HTTP_X_FORWARDED_FOR'];
-        } else {
-            return $_SERVER['REMOTE_ADDR'];
+        $pluginOptions = Helper::options()->plugin('VisitorLoggerPro');
+        $trustProxy = isset($pluginOptions->trustProxy) && (string) $pluginOptions->trustProxy === '1';
+        if ($trustProxy && !empty($_SERVER['HTTP_X_FORWARDED_FOR'])) {
+            foreach (explode(',', $_SERVER['HTTP_X_FORWARDED_FOR']) as $candidate) {
+                $candidate = trim($candidate);
+                if (filter_var($candidate, FILTER_VALIDATE_IP)) {
+                    return $candidate;
+                }
+            }
         }
+        $remote = trim((string) ($_SERVER['REMOTE_ADDR'] ?? ''));
+        return filter_var($remote, FILTER_VALIDATE_IP) ? $remote : null;
     }
 
-    private static function getIpLocation($ip)
+    public static function getIpLocation($ip)
     {
-        if (!filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6)) {
-            if (Helper::options()->plugin('VisitorLoggerPro')->ipv4db === "cz88") {
-                $ipaddr = IpLocation::getLocation($ip)['area'];
-                $location = array();
-                $location['country'] = $ipaddr ?? 'Unknown';
-            } else {
-                $xdb = __DIR__ . DIRECTORY_SEPARATOR . 'ip2region/src/ip2region.xdb';
-                $region = XdbSearcher::newWithFileOnly($xdb)->search($ip);
-                $region = str_replace("0", "", $region);
-
-                $subStrings = explode(' ', $region);
-
-                $repeatedSubstring = explode('|', $region)[3];
-                $newString = '';
-
-                foreach ($subStrings as $subString) {
-                    if (strpos($newString, $subString) !== false) {
-                        $repeatedSubstring = $subString;
-                        break;
-                    }
-                    $newString .= $subString . ' ';
-                }
-
-                if ($repeatedSubstring) {
-                    $newString = str_replace($repeatedSubstring, '', $newString);
-                    $ipaddr = str_replace("|", "", $newString);
-                } else {
-                    $ipaddr = str_replace("|", "", $region);
-                }
-                $location['country'] = $ipaddr ?? 'Unknown';
+        static $requestCache = array();
+        if (isset($requestCache[$ip])) {
+            return $requestCache[$ip];
+        }
+        $cacheKey = 'vlp_location_' . md5(__TYPECHO_ROOT_DIR__ . '|' . $ip);
+        if (function_exists('apcu_fetch')) {
+            $cached = apcu_fetch($cacheKey, $success);
+            if ($success && is_array($cached)) {
+                return $requestCache[$ip] = $cached;
             }
-        } else {
-            $ipaddr = self::ipquery($ip);
-            $location['country'] = $ipaddr;
+        }
+
+        $location = array('country' => 'Unknown', 'region' => 'Unknown', 'city' => 'Unknown');
+        try {
+            if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)) {
+                if (Helper::options()->plugin('VisitorLoggerPro')->ipv4db === 'cz88' && function_exists('iconv')) {
+                    $location = VisitorLoggerPro_Location::fromCz88(IpLocation::getLocation($ip));
+                } else {
+                    static $searcher = null;
+                    if ($searcher === null) {
+                        $xdb = __DIR__ . DIRECTORY_SEPARATOR . 'ip2region/src/ip2region.xdb';
+                        $vectorIndex = XdbSearcher::loadVectorIndexFromFile($xdb);
+                        $searcher = XdbSearcher::newWithVectorIndex($xdb, $vectorIndex);
+                    }
+                    $location = VisitorLoggerPro_Location::fromIp2Region($searcher->search($ip));
+                }
+            } elseif (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6)) {
+                $location = VisitorLoggerPro_Location::parse(self::ipquery($ip));
+            }
+        } catch (Throwable $e) {
+            error_log('VisitorLoggerPro IP lookup error: ' . $e->getMessage());
+        }
+
+        $requestCache[$ip] = $location;
+        if (function_exists('apcu_store')) {
+            apcu_store($cacheKey, $location, 86400);
         }
         return $location;
     }
 
     private static function ipquery($ip)
     {
-        $db6 = new vlp\Ip\ipdbv6(__DIR__ . DIRECTORY_SEPARATOR . 'ipdata/src/zxipv6wry.db');
-        $code = 0;
         try {
-            if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6)) {
-                $result = $db6->query($ip);
-            }
-        } catch (Exception $e) {
-            $result = array("disp" => $e->getMessage());
-            $code = -400;
+            $db6 = new vlp\Ip\ipdbv6(__DIR__ . DIRECTORY_SEPARATOR . 'ipdata/src/zxipv6wry.db');
+            $result = $db6->query($ip);
+            $address = isset($result['addr']) && is_array($result['addr']) ? $result['addr'] : array();
+            $raw = implode('', array_slice($address, 0, 2));
+            return str_replace(
+                array('无线基站网络', '公众宽带', '3GNET网络', 'CMNET网络', 'CTNET网络', "\t"),
+                '',
+                $raw
+            );
+        } catch (Throwable $e) {
+            error_log('VisitorLoggerPro IPv6 lookup error: ' . $e->getMessage());
+            return '';
         }
-        $o1 = $result["addr"][0];
-        $o2 = $result["addr"][1];
-        $o1 = str_replace("\"", "\\\"", $o1);
-        $o2 = str_replace("\"", "\\\"", $o2);
-        $local = str_replace(["无线基站网络", "公众宽带", "3GNET网络", "CMNET网络", "CTNET网络", "\t"], "", $o1);
-        $locals = str_replace(["无线基站网络", "公众宽带", "3GNET网络", "CMNET网络", "CTNET网络", "中国", "\t"], "", $o2);
-        return $local . $locals;
     }
 
 

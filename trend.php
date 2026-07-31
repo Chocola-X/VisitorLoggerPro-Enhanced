@@ -8,12 +8,25 @@ if (!defined('__TYPECHO_ADMIN__')) {
 include 'header.php';
 include 'menu.php';
 
+$options = Helper::options();
+$security = Typecho_Widget::widget('Widget_Security');
+$trendApiUrl = $security->getIndex('/action/visitor-stats-api?do=trend');
+$pluginAssetUrl = rtrim($options->pluginUrl, '/') . '/VisitorLoggerPro';
+$logsPanelUrl = Typecho_Common::url('extending.php?panel=VisitorLoggerPro%2Fpanel.php', $options->adminUrl);
+$trendPanelUrl = Typecho_Common::url('extending.php?panel=VisitorLoggerPro%2Ftrend.php', $options->adminUrl);
+
 // 获取配置的背景URL（带默认值）
 $backgroundUrl = Helper::options()->plugin('VisitorLoggerPro')->backgroundUrl ?: 'https://pic.nekopara.uk/?format=webp';
+if (!filter_var($backgroundUrl, FILTER_VALIDATE_URL) || !in_array(parse_url($backgroundUrl, PHP_URL_SCHEME), array('http', 'https'), true)) {
+    $backgroundUrl = '';
+}
 
 
 // 获取配置的卡片背景色（带默认值）
 $backgroundColour = Helper::options()->plugin('VisitorLoggerPro')->backgroundColour ?: '#ffffffc4';
+if (!preg_match('/^#[0-9a-fA-F]{3,8}$/', $backgroundColour)) {
+    $backgroundColour = '#ffffffc4';
+}
 
 ?>
 
@@ -53,7 +66,7 @@ function loadECharts() {
             console.warn('⚠️ ECharts CDN加载失败，尝试本地文件');
             // CDN失败，立即尝试本地文件
             const localScript = document.createElement('script');
-            localScript.src = '../usr/plugins/VisitorLoggerPro/js/echarts.min.js';
+        localScript.src = <?php echo json_encode($pluginAssetUrl . '/js/echarts.min.js'); ?>;
         localScript.onload = () => {
             console.log('✅ ECharts 本地文件加载成功');
             resolve('local');
@@ -85,13 +98,13 @@ function loadFlatpickr() {
             console.warn('⚠️ Flatpickr CDN加载失败，尝试本地文件');
             // CDN失败，立即尝试本地文件
             const localScript = document.createElement('script');
-            localScript.src = '../usr/plugins/VisitorLoggerPro/js/flatpickr.js';
+        localScript.src = <?php echo json_encode($pluginAssetUrl . '/js/flatpickr.js'); ?>;
         localScript.onload = () => {
             console.log('✅ Flatpickr 本地文件加载成功');
             // 加载本地CSS
             const cssLink = document.createElement('link');
             cssLink.rel = 'stylesheet';
-        cssLink.href = '../usr/plugins/VisitorLoggerPro/css/flatpickr.min.css';
+        cssLink.href = <?php echo json_encode($pluginAssetUrl . '/css/flatpickr.min.css'); ?>;
         document.head.appendChild(cssLink);
         resolve('local');
         };
@@ -206,7 +219,7 @@ function initializeApp() {
                                     endDate
                                 });
 
-                                fetch('../usr/plugins/VisitorLoggerPro/getTrendData.php', {
+                                fetch(<?php echo json_encode($trendApiUrl, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>, {
                                         method: 'POST',
                                         headers: {
                                             'Content-Type': 'application/json'
@@ -758,17 +771,17 @@ function initializeApp() {
 </script>
 
 <style>
-    .main {
+    #vlp-trend-admin {
         padding: 20px;
         min-height: 100vh;
-        background-image: url('<?php echo $backgroundUrl; ?>');
+        background-image: url(<?php echo json_encode($backgroundUrl, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>);
         background-repeat: no-repeat;
         background-position: center center;
         background-attachment: fixed;
         background-size: cover;
     }
 
-    .body.container {
+    #vlp-trend-admin .body.container {
         max-width: 100%;
         margin: 0 auto;
         padding: 0 20px;
@@ -1052,6 +1065,37 @@ function initializeApp() {
     }
 
     @media (max-width: 768px) {
+        #vlp-trend-admin {
+            padding: 8px;
+        }
+
+        #vlp-trend-admin .body.container {
+            width: 100%;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        .page-header {
+            align-items: flex-start;
+            flex-direction: column;
+            gap: 12px;
+            padding: 14px;
+        }
+
+        .page-header h2 {
+            white-space: nowrap;
+        }
+
+        .nav-links {
+            width: 100%;
+        }
+
+        .nav-link {
+            flex: 1;
+            padding: 8px;
+            text-align: center;
+        }
+
         .control-group {
             flex-direction: column;
             align-items: flex-start;
@@ -1133,13 +1177,13 @@ function initializeApp() {
     }
 </style>
 
-<div class="main">
+<main class="main" id="vlp-trend-admin">
     <div class="body container">
         <div class="page-header">
             <h2>趋势分析</h2>
             <div class="nav-links">
-                <a href="?panel=VisitorLoggerPro%2Fpanel.php" class="nav-link">访客日志</a>
-                <a href="?panel=VisitorLoggerPro%2Ftrend.php" class="nav-link active">趋势分析</a>
+                <a href="<?php echo htmlspecialchars($logsPanelUrl, ENT_QUOTES, 'UTF-8'); ?>" class="nav-link">访客日志</a>
+                <a href="<?php echo htmlspecialchars($trendPanelUrl, ENT_QUOTES, 'UTF-8'); ?>" class="nav-link active">趋势分析</a>
             </div>
         </div>
 
@@ -1228,7 +1272,7 @@ function initializeApp() {
                         <div class="metric-description">
                             <p><strong>概念：</strong>Unique Visitor，通过IP地址+User-Agent组合识别的独立访客数量，比单纯IP统计更精准。</p>
                             <p><strong>统计方法：</strong>将访客的IP地址和浏览器标识(User-Agent)组合作为唯一标识符进行去重统计。</p>
-                            <p><strong>获取数据：</strong><code>SELECT COUNT(DISTINCT CONCAT(ip, '|', user_agent)) FROM visitor_log WHERE time BETWEEN ? AND ?</code></p>
+                            <p><strong>获取数据：</strong><code>SELECT COUNT(DISTINCT visitor_hash) FROM visitor_log WHERE time BETWEEN ? AND ?</code></p>
                         </div>
                     </div>
                 </div>
@@ -1242,7 +1286,7 @@ function initializeApp() {
                         <div class="metric-description">
                             <p><strong>概念：</strong>基于时间间隔的会话识别，同一访客在30分钟内的连续访问算作一次会话。</p>
                             <p><strong>统计方法：</strong>按IP+User-Agent分组，当访问间隔超过30分钟时认为是新的会话开始。</p>
-                            <p><strong>获取数据：</strong>复杂SQL查询，使用窗口函数计算时间间隔，识别会话边界并统计会话总数。</p>
+                            <p><strong>获取数据：</strong>一次有序查询后按 30 分钟间隔识别会话边界。</p>
                         </div>
                     </div>
                 </div>
@@ -1251,7 +1295,7 @@ function initializeApp() {
             <div class="technical-notes">
                 <h4>🔧 技术实现要点</h4>
                 <ul>
-                    <li><strong>数据库兼容性：</strong>系统支持MySQL 5.5+到8.0+，对于不支持窗口函数的旧版本会自动回退到简化算法</li>
+                    <li><strong>数据库兼容性：</strong>统计查询同时支持 Typecho 的 MySQL 与 SQLite 部署</li>
                     <li><strong>会话算法：</strong>采用智能会话识别算法，30分钟无访问后的下次访问被视为新会话</li>
                     <li><strong>隐私保护：</strong>IP地址在显示时进行匿名化处理，仅显示前两段以保护访客隐私</li>
                     <li><strong>性能优化：</strong>针对大数据量场景优化查询性能，支持按小时和按天双维度统计</li>
@@ -1260,7 +1304,7 @@ function initializeApp() {
             </div>
         </div>
     </div>
-</div>
+</main>
 
 <?php
 include 'footer.php';

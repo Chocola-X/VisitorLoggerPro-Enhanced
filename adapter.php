@@ -27,8 +27,8 @@ if (class_exists('ip2region\\XdbSearcher')) {
 }
 
 // 只有在没有定义这些类的情况下才创建别名
-if (!class_exists('Typecho_Plugin_Interface') && class_exists('\\Typecho\\Plugin\\Interface')) {
-    class_alias('\\Typecho\\Plugin\\Interface', 'Typecho_Plugin_Interface');
+if (!interface_exists('Typecho_Plugin_Interface') && interface_exists('\\Typecho\\Plugin\\PluginInterface')) {
+    class_alias('\\Typecho\\Plugin\\PluginInterface', 'Typecho_Plugin_Interface');
 }
 
 if (!class_exists('Typecho_Db') && class_exists('\\Typecho\\Db')) {
@@ -43,6 +43,14 @@ if (!class_exists('Typecho_Plugin') && class_exists('\\Typecho\\Plugin')) {
     class_alias('\\Typecho\\Plugin', 'Typecho_Plugin');
 }
 
+if (!class_exists('Typecho_Widget') && class_exists('\\Typecho\\Widget')) {
+    class_alias('\\Typecho\\Widget', 'Typecho_Widget');
+}
+
+if (!interface_exists('Widget_Interface_Do') && interface_exists('\\Widget\\ActionInterface')) {
+    class_alias('\\Widget\\ActionInterface', 'Widget_Interface_Do');
+}
+
 if (!class_exists('Typecho_Widget_Helper_Form') && class_exists('\\Typecho\\Widget\\Helper\\Form')) {
     class_alias('\\Typecho\\Widget\\Helper\\Form', 'Typecho_Widget_Helper_Form');
 }
@@ -55,15 +63,23 @@ if (!class_exists('Typecho_Widget_Helper_Form_Element_Radio') && class_exists('\
     class_alias('\\Typecho\\Widget\\Helper\\Form\\Element\\Radio', 'Typecho_Widget_Helper_Form_Element_Radio');
 }
 
+if (!class_exists('Typecho_Widget_Helper_Form_Element_Text') && class_exists('\\Typecho\\Widget\\Helper\\Form\\Element\\Text')) {
+    class_alias('\\Typecho\\Widget\\Helper\\Form\\Element\\Text', 'Typecho_Widget_Helper_Form_Element_Text');
+}
+
 if (!class_exists('Typecho_Request') && class_exists('\\Typecho\\Request')) {
     class_alias('\\Typecho\\Request', 'Typecho_Request');
 }
 
-if (!class_exists('Widget_Archive') && class_exists('\\Typecho\\Widget\\Archive')) {
-    class_alias('\\Typecho\\Widget\\Archive', 'Widget_Archive');
+if (!class_exists('Widget_Archive') && class_exists('\\Widget\\Archive')) {
+    class_alias('\\Widget\\Archive', 'Widget_Archive');
 }
 
-// 处理Helper类
+if (!class_exists('Helper') && class_exists('\\Utils\\Helper')) {
+    class_alias('\\Utils\\Helper', 'Helper');
+}
+
+// 处理旧版命名空间中的 Helper 类
 if (!class_exists('Helper') && class_exists('\\Typecho\\Helper')) {
     class Helper
     {
@@ -116,7 +132,7 @@ if (!function_exists('__')) {
 }
 
 // 修正plugin路径指向
-if (!class_exists('VisitorLogger_Action') && class_exists('VisitorLoggerPro_Action')) {
+if (!class_exists('VisitorLogger_Action', false) && class_exists('VisitorLoggerPro_Action')) {
     class_alias('VisitorLoggerPro_Action', 'VisitorLogger_Action');
 }
 

@@ -11,13 +11,18 @@
  */
 if (!defined('__TYPECHO_ROOT_DIR__')) exit;
 
+$security = Typecho_Widget::widget('Widget_Security');
+$isAdministrator = $this->user->hasLogin() && $this->user->pass('administrator', true);
+$currentIP = VisitorLoggerPro_Plugin::getIpAddress() ?: '';
+$options = Helper::options();
+$statsApiUrl = Typecho_Common::url('/action/visitor-stats-api?do=aggregate', $options->index);
+$pluginAssetUrl = rtrim($options->pluginUrl, '/') . '/VisitorLoggerPro';
+$configFile = __TYPECHO_ROOT_DIR__ . __TYPECHO_PLUGIN_DIR__ . '/VisitorLoggerPro/ip_filters.json';
+
 // 如果管理员尝试删除当前IP数据
-if ($this->user->hasLogin() && $this->user->group == 'administrator' && isset($_POST['delete_ip_data'])) {
-    // 获取真实IP，优先使用CDN转发的IP
-    $ip_to_delete = isset($_SERVER['HTTP_X_FORWARDED_FOR']) ? 
-        explode(',', $_SERVER['HTTP_X_FORWARDED_FOR'])[0] : 
-        (isset($_SERVER['REMOTE_ADDR']) ? $_SERVER['REMOTE_ADDR'] : '');
-    
+if ($isAdministrator && isset($_POST['delete_ip_data'])) {
+    $security->protect();
+    $ip_to_delete = $currentIP;
     $response = ['success' => false, 'message' => '未知错误'];
     if (!empty($ip_to_delete)) {
         try {
@@ -48,18 +53,15 @@ if ($this->user->hasLogin() && $this->user->group == 'administrator' && isset($_
 
 // 处理IP过滤配置的保存
 $serverFilteredIPs = [];
-if ($this->user->hasLogin() && $this->user->group == 'administrator') {
-    // 配置文件路径
-    $configFile = __DIR__ . '/ip_filters.json';
-
+if ($isAdministrator) {
     // 保存IP过滤配置
     if (isset($_POST['save_ip_filter'])) {
-        // 获取真实IP，优先使用CDN转发的IP
-        $currentIP = isset($_SERVER['HTTP_X_FORWARDED_FOR']) ? 
-            explode(',', $_SERVER['HTTP_X_FORWARDED_FOR'])[0] : 
-            (isset($_SERVER['REMOTE_ADDR']) ? $_SERVER['REMOTE_ADDR'] : '');
-        
-        $action = $_POST['action']; // 'exclude' 或 'include'
+        $security->protect();
+        $action = isset($_POST['action']) ? $_POST['action'] : '';
+        if (!in_array($action, array('exclude', 'include'), true)) {
+            header('HTTP/1.1 400 Bad Request');
+            exit;
+        }
 
         // 读取现有配置
         $filters = [];
@@ -75,7 +77,7 @@ if ($this->user->hasLogin() && $this->user->group == 'administrator') {
         }
 
         // 保存配置
-        file_put_contents($configFile, json_encode($filters));
+        file_put_contents($configFile, json_encode(array_values($filters)), LOCK_EX);
     }
 
     // 读取当前配置
@@ -84,7 +86,7 @@ if ($this->user->hasLogin() && $this->user->group == 'administrator') {
     }
 }
 
-$this->need('component/header.php');
+$this->need('header.php');
 ?>
 
 <!-- 智能加载ECharts：优先CDN，失败时自动回退到本地 -->
@@ -123,7 +125,7 @@ function loadEChartsWithFallback() {
             console.warn('⚠️ ECharts CDN加载超时或失败，立即尝试本地文件');
             // CDN失败，立即加载本地文件
             const localScript = document.createElement('script');
-            localScript.src = '../usr/plugins/VisitorLoggerPro/js/echarts.min.js';
+            localScript.src = <?php echo json_encode($pluginAssetUrl . '/js/echarts.min.js'); ?>;
         localScript.onload = () => {
             console.log('✅ ECharts 本地文件加载成功');
             resolve('local');
@@ -226,12 +228,14 @@ document.body.appendChild(errorDiv);
                                         <!-- 添加隐藏表单用于提交删除请求 -->
                                         <form id="deleteIpForm" method="post" style="display:none;">
                                             <input type="hidden" name="delete_ip_data" value="1">
+                                            <input type="hidden" name="_" value="<?php echo htmlspecialchars($security->getToken($this->request->getRequestUrl()), ENT_QUOTES, 'UTF-8'); ?>">
                                         </form>
 
                                         <!-- 添加隐藏表单用于提交IP过滤配置 -->
                                         <form id="ipFilterForm" method="post" style="display:none;">
                                             <input type="hidden" name="save_ip_filter" value="1">
                                             <input type="hidden" name="action" id="filterAction" value="">
+                                            <input type="hidden" name="_" value="<?php echo htmlspecialchars($security->getToken($this->request->getRequestUrl()), ENT_QUOTES, 'UTF-8'); ?>">
                                         </form>
                                     <?php else: ?>
                                         <p style="margin: 0; font-size: 12px; color: #999;"><i>管理员登录后可开启本设备排除或删除选项</i></p>
@@ -1120,7 +1124,7 @@ document.body.appendChild(errorDiv);
     var dataLoadAttempts = 0; // 记录加载尝试次数
     var maxLoadAttempts = 2; // 最大加载尝试次数
 
-    var serverFilteredIPs = <?php echo json_encode($serverFilteredIPs); ?>;
+    var serverFilteredIPs = <?php echo json_encode($serverFilteredIPs, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
 
     // 图表样式配置
     var chartStyles = {
@@ -1790,16 +1794,7 @@ document.body.appendChild(errorDiv);
                 });
             }
 
-            // 获取当前站点根URL
-            let baseUrl = window.location.protocol + '//' + window.location.host;
-            
-            // 构建API完整URL
-            let apiUrl = '<?php echo $this->options->pluginUrl; ?>/VisitorLoggerPro/getVisitStatistic.php';
-            
-            // 如果是相对路径，则添加基础URL
-            if (apiUrl.indexOf('http') !== 0) {
-                apiUrl = baseUrl + apiUrl;
-            }
+            let apiUrl = <?php echo json_encode($statsApiUrl, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
             
             console.log("API请求URL:", apiUrl);
             
@@ -2202,9 +2197,7 @@ document.body.appendChild(errorDiv);
         }
 
         // 获取当前IP (优先使用X-Forwarded-For以支持CDN)
-        const currentIP = '<?php echo isset($_SERVER["HTTP_X_FORWARDED_FOR"]) ? 
-            explode(",", $_SERVER["HTTP_X_FORWARDED_FOR"])[0] : 
-            (isset($_SERVER["REMOTE_ADDR"]) ? $_SERVER["REMOTE_ADDR"] : ""); ?>';
+        const currentIP = <?php echo json_encode($currentIP, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
 
         // 检查当前设备是否已被排除（检查服务器端配置和本地存储）
         const isExcluded = localStorage.getItem('visitorStats_selfExcluded') === 'true' ||
@@ -2520,5 +2513,5 @@ document.body.appendChild(errorDiv);
 </script>
 
 <!-- footer -->
-<?php $this->need('component/footer.php'); ?>
+<?php $this->need('footer.php'); ?>
 <!-- / footer -->
