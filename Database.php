@@ -23,6 +23,7 @@ class VisitorLoggerPro_Database
                 . 'country VARCHAR(100) DEFAULT NULL,'
                 . 'region VARCHAR(100) DEFAULT NULL,'
                 . 'city VARCHAR(100) DEFAULT NULL,'
+                . 'isp VARCHAR(150) DEFAULT NULL,'
                 . "visitor_hash CHAR(32) NOT NULL DEFAULT '',"
                 . "user_agent TEXT DEFAULT '',"
                 . 'time DATETIME NOT NULL'
@@ -35,6 +36,7 @@ class VisitorLoggerPro_Database
                 . '`country` VARCHAR(100) DEFAULT NULL,'
                 . '`region` VARCHAR(100) DEFAULT NULL,'
                 . '`city` VARCHAR(100) DEFAULT NULL,'
+                . '`isp` VARCHAR(150) DEFAULT NULL,'
                 . "`visitor_hash` CHAR(32) NOT NULL DEFAULT '',"
                 . "`user_agent` TEXT NULL,"
                 . '`time` DATETIME NOT NULL'
@@ -57,6 +59,37 @@ class VisitorLoggerPro_Database
     public static function visitorHash($ip, $userAgent)
     {
         return md5((string) $ip . "\x1f" . (string) $userAgent);
+    }
+
+    /**
+     * File upgrades can happen while the plugin remains active.  Ensure the
+     * new column exists before the first post-upgrade visitor is inserted.
+     */
+    public static function ensureIspColumn()
+    {
+        static $ready = false;
+        if ($ready) {
+            return;
+        }
+        $db = Typecho_Db::get();
+        $prefix = $db->getPrefix();
+        $columns = self::getColumns($db, $prefix);
+        if (!isset($columns['isp'])) {
+            $table = self::quoteIdentifier($prefix . 'visitor_log');
+            try {
+                $db->query(
+                    "ALTER TABLE {$table} ADD COLUMN `isp` VARCHAR(150) DEFAULT NULL",
+                    Typecho_Db::WRITE
+                );
+            } catch (Exception $e) {
+                // A concurrent request may have completed the same migration.
+                $columns = self::getColumns($db, $prefix);
+                if (!isset($columns['isp'])) {
+                    throw $e;
+                }
+            }
+        }
+        $ready = true;
     }
 
     public static function siteDate($format = 'Y-m-d H:i:s', $timestamp = null)
@@ -109,6 +142,7 @@ class VisitorLoggerPro_Database
         $definitions = array(
             'region' => 'VARCHAR(100) DEFAULT NULL',
             'city' => 'VARCHAR(100) DEFAULT NULL',
+            'isp' => 'VARCHAR(150) DEFAULT NULL',
             'user_agent' => self::isSQLite($db) ? "TEXT DEFAULT ''" : 'TEXT NULL',
             'visitor_hash' => "CHAR(32) NOT NULL DEFAULT ''"
         );
@@ -208,7 +242,7 @@ class VisitorLoggerPro_Database
         $lastId = 0;
         do {
             $rows = $db->fetchAll(
-                $db->select('id', 'country', 'region', 'city')
+                $db->select('id', 'country', 'region', 'city', 'isp')
                     ->from($prefix . 'visitor_log')
                     ->where('id > ?', $lastId)
                     ->where('(region IS NULL OR region = ? OR city IS NULL OR city = ?)', '', '')
@@ -217,7 +251,9 @@ class VisitorLoggerPro_Database
             );
             foreach ($rows as $row) {
                 $lastId = (int) $row['id'];
-                $location = VisitorLoggerPro_Location::parse($row['country'], $row['region'], $row['city']);
+                $location = VisitorLoggerPro_Location::parse(
+                    $row['country'], $row['region'], $row['city'], $row['isp']
+                );
                 $db->query(
                     $db->update($prefix . 'visitor_log')->rows($location)->where('id = ?', $lastId)
                 );

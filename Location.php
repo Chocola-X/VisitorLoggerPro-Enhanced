@@ -12,8 +12,14 @@ class VisitorLoggerPro_Location
         return self::clean(array(
             'country' => self::part($parts[0]),
             'region' => self::part($parts[2]),
-            'city' => self::part($parts[3])
+            'city' => self::part($parts[3]),
+            'isp' => self::part($parts[4])
         ));
+    }
+
+    public static function fromDatabase($result)
+    {
+        return self::clean(is_array($result) ? $result : array());
     }
 
     public static function fromCz88($result)
@@ -21,10 +27,11 @@ class VisitorLoggerPro_Location
         $raw = isset($result['data']['country']) ? $result['data']['country'] : '';
         $region = isset($result['province']) ? $result['province'] : '';
         $city = isset($result['city']) ? $result['city'] : '';
-        return self::parse($raw, $region, $city);
+        $isp = isset($result['data']['isp']) ? $result['data']['isp'] : '';
+        return self::parse($raw, $region, $city, $isp);
     }
 
-    public static function parse($raw, $regionHint = '', $cityHint = '')
+    public static function parse($raw, $regionHint = '', $cityHint = '', $ispHint = '')
     {
         $raw = trim(preg_replace('/\s+/u', '', (string) $raw));
         if (strpos($raw, '|') !== false) {
@@ -35,13 +42,12 @@ class VisitorLoggerPro_Location
         $city = self::part($cityHint);
         $country = '';
         $chinaPattern = '/^(?:中国)?(北京市|天津市|上海市|重庆市|内蒙古自治区|广西壮族自治区|西藏自治区|宁夏回族自治区|新疆维吾尔自治区|香港特别行政区|澳门特别行政区|台湾省|[\p{Han}]{2,8}省)/u';
-        if ($region !== '' || preg_match($chinaPattern, $raw, $matches)) {
+        $chinaRegionPattern = '/^(?:北京|天津|上海|重庆|内蒙古|广西|西藏|宁夏|新疆|香港|澳门|台湾|河北|山西|辽宁|吉林|黑龙江|江苏|浙江|安徽|福建|江西|山东|河南|湖北|湖南|广东|海南|四川|贵州|云南|陕西|甘肃|青海)(?:省|市|自治区|壮族自治区|回族自治区|维吾尔自治区|特别行政区)?$/u';
+        $rawIsChina = preg_match($chinaPattern, $raw, $matches);
+        if (($region !== '' && preg_match($chinaRegionPattern, $region)) || $rawIsChina) {
             $country = '中国';
             if ($region === '' && !empty($matches[1])) {
                 $region = $matches[1];
-            }
-            if ($region !== '' && mb_substr($region, -1, 1, 'UTF-8') !== '省' && !preg_match('/(市|区)$/u', $region)) {
-                $region .= '省';
             }
 
             $remaining = preg_replace('/^中国/u', '', $raw);
@@ -82,23 +88,62 @@ class VisitorLoggerPro_Location
             $country = $raw;
         }
 
-        return self::clean(array('country' => $country, 'region' => $region, 'city' => $city));
+        return self::clean(array(
+            'country' => $country,
+            'region' => $region,
+            'city' => $city,
+            'isp' => $ispHint
+        ));
+    }
+
+    public static function format($location)
+    {
+        $location = self::clean(is_array($location) ? $location : array());
+        $parts = array();
+        foreach (array('country', 'region', 'city', 'isp') as $key) {
+            $value = $location[$key];
+            if ($value !== '' && (empty($parts) || end($parts) !== $value)) {
+                $parts[] = $value;
+            }
+        }
+        return implode(' ', $parts);
     }
 
     private static function clean($location)
     {
-        foreach ($location as $key => $value) {
-            $location[$key] = self::part($value);
-            if ($location[$key] === '') {
-                $location[$key] = 'Unknown';
-            }
+        $cleaned = array();
+        foreach (array('country', 'region', 'city', 'isp') as $key) {
+            $cleaned[$key] = self::part(isset($location[$key]) ? $location[$key] : '');
         }
-        return $location;
+        if (in_array($cleaned['country'], array('中华人民共和国', '中国大陆'), true)) {
+            $cleaned['country'] = '中国';
+        }
+        if ($cleaned['country'] === '中国') {
+            $aliases = array(
+                '内蒙古自治区' => '内蒙古', '广西壮族自治区' => '广西',
+                '西藏自治区' => '西藏', '宁夏回族自治区' => '宁夏',
+                '新疆维吾尔自治区' => '新疆', '香港特别行政区' => '香港',
+                '澳门特别行政区' => '澳门'
+            );
+            if (isset($aliases[$cleaned['region']])) {
+                $cleaned['region'] = $aliases[$cleaned['region']];
+            } else {
+                $cleaned['region'] = preg_replace('/[省市]$/u', '', $cleaned['region']);
+            }
+            $cleaned['city'] = preg_replace('/市$/u', '', $cleaned['city']);
+        }
+        if ($cleaned['region'] === $cleaned['country']) {
+            $cleaned['region'] = '';
+        }
+        return $cleaned;
     }
 
     private static function part($value)
     {
         $value = trim((string) $value);
-        return $value === '0' || strcasecmp($value, 'null') === 0 ? '' : $value;
+        return $value === '0'
+            || strcasecmp($value, 'null') === 0
+            || strcasecmp($value, 'unknown') === 0
+            ? '' : $value;
     }
 }

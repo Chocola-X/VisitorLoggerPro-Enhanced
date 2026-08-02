@@ -153,6 +153,9 @@ class VisitorLoggerPro_Statistics
             ->where($column . ' != ?', 'Unknown');
         if ($country !== null) {
             $query->where('country = ?', $country);
+            if ($column === 'region') {
+                $query->where('region != ?', $country);
+            }
         }
 
         return $db->fetchAll(

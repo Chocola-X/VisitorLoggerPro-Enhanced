@@ -44,10 +44,15 @@ logs/
 # 缓存文件
 cache/
 *.cache
+__pycache__/
+*.pyc
 
 # 本地测试文件
 test/
 tests/local/
+
+# IP 数据库构建源文件（运行时只使用生成的 .vlpdb）
+ip-info/ip_info.db
 
 # 其他
 node_modules/
@@ -57,3 +62,5 @@ blog.md
 
 .*/
 function_test/
+tools/
+ip-info/

@@ -9,7 +9,7 @@ if (!defined('__TYPECHO_ROOT_DIR__')) {
  * 
  * @package VisitorLoggerPro
  * @author GTX690战术核显卡导弹
- * @version 2.3.1
+ * @version 2.4.1
  * @link https://www.nekopara.uk
  */
 
@@ -18,11 +18,9 @@ require_once dirname(__FILE__) . '/adapter.php';
 require_once dirname(__FILE__) . '/Database.php';
 require_once dirname(__FILE__) . '/Statistics.php';
 require_once dirname(__FILE__) . '/Location.php';
+require_once dirname(__FILE__) . '/IpDatabase.php';
 
-require_once dirname(__FILE__) . '/ipdata/src/IpLocation.php';
 require_once dirname(__FILE__) . '/ipdata/src/ipdbv6.func.php';
-
-use vlp\Ip\IpLocation;
 
 require_once dirname(__FILE__) . '/ip2region/src/XdbSearcher.php';
 
@@ -120,10 +118,14 @@ class VisitorLoggerPro_Plugin implements Typecho_Plugin_Interface
         /* IPV4数据库选择 */
         $ipv4db = new Typecho_Widget_Helper_Form_Element_Radio(
             'ipv4db',
-            array('ip2region' => _t('ip2region数据库'), 'cz88' => _t('纯真数据库')),
+            array(
+                'ip2region' => _t('ip2region 数据库'),
+                'ipinfo' => _t('精简 IP 信息数据库'),
+                'cz88' => _t('整理后的纯真数据库')
+            ),
             'ip2region',
             'IPV4数据库选项',
-            _t('<strong>纯真数据库(cz88):</strong> 更新勤快，数据详尽，但可能包含一些非标准信息（如"网吧"），插件已做过滤处理。<br><strong>ip2region数据库:</strong> 查询速度快，格式标准统一，准确性高。推荐使用。')
+            _t('<strong>精简 IP 信息数据库:</strong> 保留国家、省份、城市、运营商，覆盖信息最完整。<br><strong>整理后的纯真数据库:</strong> 已预先拆分地点字段，运行时不再猜测或补行政区后缀。<br><strong>ip2region 数据库:</strong> 体积适中、查询稳定。')
         );
         $form->addInput($ipv4db);
 
@@ -362,15 +364,17 @@ class VisitorLoggerPro_Plugin implements Typecho_Plugin_Interface
             return;
         }
 
+        VisitorLoggerPro_Database::ensureIspColumn();
         $location = self::getIpLocation($ip);
         $userAgent = substr((string) ($_SERVER['HTTP_USER_AGENT'] ?? ''), 0, 512);
 
         $db->query($db->insert('table.visitor_log')->rows(array(
             'ip' => $ip,
             'route' => $route,
-            'country' => $location['country'] ?? 'Unknown',
-            'region' => $location['region'] ?? 'Unknown',
-            'city' => $location['city'] ?? 'Unknown',
+            'country' => $location['country'] ?? '',
+            'region' => $location['region'] ?? '',
+            'city' => $location['city'] ?? '',
+            'isp' => $location['isp'] ?? '',
             'visitor_hash' => VisitorLoggerPro_Database::visitorHash($ip, $userAgent),
             'user_agent' => $userAgent,
             'time' => VisitorLoggerPro_Database::siteDate()
@@ -439,7 +443,7 @@ class VisitorLoggerPro_Plugin implements Typecho_Plugin_Interface
         if (isset($requestCache[$ip])) {
             return $requestCache[$ip];
         }
-        $cacheKey = 'vlp_location_' . md5(__TYPECHO_ROOT_DIR__ . '|' . $ip);
+        $cacheKey = 'vlp_location_v3_' . md5(__TYPECHO_ROOT_DIR__ . '|' . $ip);
         if (function_exists('apcu_fetch')) {
             $cached = apcu_fetch($cacheKey, $success);
             if ($success && is_array($cached)) {
@@ -447,11 +451,19 @@ class VisitorLoggerPro_Plugin implements Typecho_Plugin_Interface
             }
         }
 
-        $location = array('country' => 'Unknown', 'region' => 'Unknown', 'city' => 'Unknown');
+        $location = array('country' => '', 'region' => '', 'city' => '', 'isp' => '');
         try {
             if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)) {
-                if (Helper::options()->plugin('VisitorLoggerPro')->ipv4db === 'cz88' && function_exists('iconv')) {
-                    $location = VisitorLoggerPro_Location::fromCz88(IpLocation::getLocation($ip));
+                $database = Helper::options()->plugin('VisitorLoggerPro')->ipv4db;
+                if ($database === 'cz88' || $database === 'ipinfo') {
+                    static $compactDatabases = array();
+                    $path = $database === 'cz88'
+                        ? __DIR__ . '/ipdata/src/qqwry.vlpdb'
+                        : __DIR__ . '/ipinfo/src/ip_info.vlpdb';
+                    if (!isset($compactDatabases[$path])) {
+                        $compactDatabases[$path] = new VisitorLoggerPro_IpDatabase($path);
+                    }
+                    $location = VisitorLoggerPro_Location::fromDatabase($compactDatabases[$path]->search($ip));
                 } else {
                     static $searcher = null;
                     if ($searcher === null) {

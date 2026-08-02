@@ -1273,7 +1273,7 @@ function initializeApp() {
                                     <tr>
                                         <td><?php echo htmlspecialchars($log['ip']); ?></td>
                                         <td><?php echo htmlspecialchars(urldecode($log['route'])); ?></td>
-                                        <td><?php echo htmlspecialchars(implode(' / ', array_filter(array($log['country'], $log['region'], $log['city']), function ($value) { return $value && $value !== 'Unknown'; }))); ?></td>
+                                        <td><?php echo htmlspecialchars(VisitorLoggerPro_Location::format($log)); ?></td>
                                         <td title="<?php echo htmlspecialchars($log['user_agent'] ?? ''); ?>"><?php
                                                                                                                 $userAgent = $log['user_agent'] ?? '';
                                                                                                                 if (strlen($userAgent) > 50) {
